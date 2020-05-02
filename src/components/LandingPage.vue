@@ -1,10 +1,28 @@
 <template>
 	<div class="tile is-ancestor">
-		<connections :is_editing_allowed="!is_started" @onFormChange="updateConnections($event)"/>
-		<credentials :is_editing_allowed="!is_started" @onFormChange="updateCredentials($event)"/>
+		<connections 
+			:is_editing_allowed="!is_started" 
+			@onFormChange="updateConnections($event)"
+		/>
+		<credentials 
+			:is_editing_allowed="!is_started" 
+			:connections="connections" 
+			@onFormChange="updateCredentials($event)"
+		/>
+		<configuration 
+			:is_editing_allowed="!is_started" 
+			:credentials="credentials"
+			:connections="connections" 
+			@onFormChange="updateConfiguration($event)
+		"/>
+		<status 
+			:credentials="credentials" 
+			:connections="connections" 
+			:is_started="is_started" @start="start" 
+			@stop="stop"
+		/>
 
-					<b-button @click="start">start</b-button>
-					<b-button @click="stop">stop</b-button>
+
 	</div>
 </template>
 
@@ -13,57 +31,63 @@
 const replicate = require('../js/replicate.js');
 import Credentials from './Credentials.vue'
 import Connections from './Connections.vue'
+import Configuration from './Configuration.vue'
+import { EventBus } from '../js/event-bus.js';
+
+import Status from './Status.vue'
 
 
 export default {
 	components: {
 		Credentials,
-		Connections
+		Connections,
+		Configuration,
+		Status
 	},
 	data () {
 		return {
 			is_started: false,
-			odex_ws_url: "wss://testnet.odex.ooo/socket",
-			odex_http_url: "https://testnet.odex.ooo/api",
-			hub_ws_url: "wss://obyte.org/bb-test",
-			wif:"",
-			testnet: true,
-			conf: {
-				credentials: {},
-				connections: {}
-			},
-			state: {
-				credentials: {}
-			}
+			credentials: {},
+			connections: {},
+			configuration: {}
 		}
 	},
 	methods:{
 		start(){
-			this.is_started = true
-/*
-			replicate.start({
-				odex_ws_url: this.odex_ws_url,
-				odex_http_url: this.odex_http_url ,
-				hub_ws_url: this.hub_ws_url,
-				wif: this.wif,
-				testnet: this.testnet,
-				sourceApiKey: '',
-				sourceApiSecret: '',
-			});
-*/
+			
+			replicate.start(
+				Object.assign({}, this.credentials, this.connections,  this.configuration),
+				EventBus
+				).then(()=>{
+					this.is_started = true
+				}).catch(
+					(e)=>{
+						                this.$buefy.toast.open({
+                    duration: 5000,
+                    message: e.toString(),
+                    position: 'is-bottom',
+                    type: 'is-danger'
+                })
+				})
 		},
 		stop(){
-						this.is_started = false
-
-		//	replicate.stop()
+			this.is_started = false
+			EventBus.$off()
+			replicate.stop()
 
 		},
 		updateCredentials: function(credentials){
-			this.conf.credentials = credentials
+			this.credentials = Object.assign({}, credentials) // we clone in a new object so watchers can see the change
 		},
 		updateConnections: function(connections){
-			this.conf.connections = connections
+			this.connections = Object.assign({}, connections) 
+		},
+		updateConfiguration: function(configuration){
+			this.configuration = Object.assign({}, configuration) 
 		}
+
+
+		
 	}
 }
 </script>

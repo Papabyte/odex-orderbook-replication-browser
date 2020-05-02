@@ -3,6 +3,9 @@ exports.odex_http_url = 'https://odex.ooo/api';
 exports.hub_ws_url = 'wss://obyte.org/bb';
 exports.MAX_PRICE_PRECISION = 8;
 exports.aa_address = 'FVRZTCFXIDQ3EYRGQSLE5AMWUQF4PRYJ';
+exports.mainnet_protocol = "obyte";
+exports.testnet_protocol = "obyte-tn" ;
+
 exports.MARKUP = (typeof process.env.MARKUP !== 'undefined') ? parseFloat(process.env.MARKUP) : 2; // %
 
 exports.quote_currency = 'BTC_20200701';

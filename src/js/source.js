@@ -8,7 +8,7 @@ let queued_amount = 0; // positive on the buy side
 
 console.log("conf.sourceApiKey" + conf.sourceApiKey);
 let bittrex;
-
+let EventBus;
 
 async function createMarketTx(side, size) {
 	if (side === 'BUY')
@@ -34,6 +34,8 @@ async function createMarketTx(side, size) {
 	}
 	console.error('---- m_resp', m_resp);
 	source_balances = await bittrex.fetchBalance();	
+	if (EventBus)
+		EventBus.$emit('bittrex_balances', source_balances);
 	unlock();
 }
 
@@ -51,10 +53,13 @@ async function updateBalances() {
 	catch (e) {
 		console.error("error from fetchBalance: " + e)
 	}
+	if (EventBus)
+		EventBus.$emit('source_balances', source_balances);
 	unlock();
 }
 
-async function start() {
+async function start(_EventBus) {
+	EventBus = _EventBus;
 	bittrex = new ccxt.bittrex({
 		apiKey: conf.sourceApiKey,
 		secret: conf.sourceApiSecret,

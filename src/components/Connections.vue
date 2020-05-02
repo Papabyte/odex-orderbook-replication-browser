@@ -1,5 +1,5 @@
 <template>
-	<div class="tile is-4 is-parent">
+	<div class="tile is-3 is-parent">
 		<article class="tile is-child notification is-info">
 			<p class="title">Connections</p>
 			<b-field label="Odex ws URL" :message="odex_ws_message">
@@ -12,16 +12,17 @@
 				<b-input @input="onChange" v-model="connections.hub_ws_url" :disabled="!is_editing_allowed" autocomplete="off"></b-input>
 			</b-field>
 			<div class="field">
-			<b-checkbox  v-model="connections.is_testnet">
+			<b-checkbox @input="onChange" v-model="connections.testnet">
 				testnet
 				</b-checkbox>
 			</div>
-			<b-button class="is-primary" v-if="!matchDefaultTestnet" @click="switchToDefaultTestnet" style="margin:10px;">Switch to testnet default settings</b-button>				
-			<b-button class="is-primary" v-if="!matchDefault" @click="switchToDefault" style="margin:10px;">Switch to default settings</b-button>
+			<b-button class="is-primary" v-if="!matchDefaultTestnet && is_editing_allowed" @click="switchToDefaultTestnet" style="margin:10px;">Switch to testnet default settings</b-button>				
+			<b-button class="is-primary" v-if="!matchDefault && is_editing_allowed" @click="switchToDefault" style="margin:10px;">Switch to default settings</b-button>
 		</article>
 	</div>
 </template>
 <script>
+const isUrl = require('is-url')
 
 export default {
   props: {
@@ -47,20 +48,20 @@ export default {
 			return this.connections.odex_ws_url == this.default_odex_ws_url_testnet 
 			&& this.connections.odex_http_url == this.default_odex_http_url_testnet
 			&& this.connections.hub_ws_url == this.default_hub_ws_url_testnet
-			&& this.connections.is_testnet
+			&& this.connections.testnet
 		},
 		matchDefault() {
 			return this.connections.odex_ws_url == this.default_odex_ws_url 
 			&& this.connections.odex_http_url == this.default_odex_http_url
 			&& this.connections.hub_ws_url == this.default_hub_ws_url
-			&& !this.connections.is_testnet
+			&& !this.connections.testnet
 		},
 	},
 	created() {
 		this.connections.odex_ws_url = localStorage.getItem('odex_ws_url') || ''
 		this.connections.odex_http_url = localStorage.getItem('odex_http_url') || ''
 		this.connections.hub_ws_url = localStorage.getItem('hub_ws_url') || ''
-		this.connections.is_testnet = localStorage.getItem('is_testnet') === 'true' || false
+		this.connections.testnet = localStorage.getItem('testnet') === 'true' || false
 		this.onChange()
 	},
 	methods:{
@@ -70,48 +71,49 @@ export default {
 			}
 		},
 		switchToDefaultTestnet(){
-			var connections = {};
+			const connections = {};
 			connections.odex_ws_url = this.default_odex_ws_url_testnet
 			connections.odex_http_url = this.default_odex_http_url_testnet
 			connections.hub_ws_url = this.default_hub_ws_url_testnet
-			connections.is_testnet = true
-			this.connections = connections // we have to reference new object to resfresh form values
+			connections.testnet = true
+			this.connections = connections // we have to reference new object to refresh form values
 			this.onChange();
 		},
 			switchToDefault(){
-			var connections = {};
+			const connections = {};
 			connections.odex_ws_url = this.default_odex_ws_url
 			connections.odex_http_url = this.default_odex_http_url
 			connections.hub_ws_url = this.default_hub_ws_url
-			connections.is_testnet = false
-			this.connections = connections // we have to reference new object to resfresh form values
+			connections.testnet = false
+			this.connections = connections // we have to reference new object to refresh form values
 			this.onChange();
 		},
 		onChange(){
-		/*	var bComplete = true;
-			if (this.credentials.wif.length < 50){
-				this.wif_message = 'not valid'
+			var bComplete = true;
+			if (!isUrl(this.connections.odex_ws_url)){
+				this.odex_ws_message = 'not valid'
 				bComplete = false
 			}
 			else {
-				this.wif_message = ''
+				this.odex_ws_message = ''
 			}
-			if (this.credentials.bittrex_api_key.length !=32){
-				this.api_key_message = 'not valid'
+			if (!isUrl(this.connections.odex_http_url)){
+				this.odex_http_message = 'not valid'
 				bComplete = false
 			}
 			else {
-				this.api_key_message = ''
+				this.odex_http_message = ''
 			}
-			if (this.credentials.bittrex_api_secret.length !=32){
-				this.api_secret_message = 'not valid'
+			if (!isUrl(this.connections.hub_ws_url)){
+				this.hub_ws_message = 'not valid'
 				bComplete = false
 			}
 			else {
-				this.api_secret_message = ''
+				this.hub_ws_message = ''
 			}
-			this.credentials.complete = this.is_form_complete = bComplete*/
-			this.saveConnections();
+			this.connections.complete = bComplete
+			if (bComplete)
+				this.saveConnections();
 			this.$emit("onFormChange", this.connections)
 		}
 	}

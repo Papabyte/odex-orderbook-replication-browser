@@ -24,9 +24,6 @@ function getDestOrderByHash(hash) {
 	return null;
 }
 
-async function cancelAllTrackedDestOrdersBeforeExiting() {
-	await cancelAllTrackedDestOrders();
-}
 
 async function cancelAllTrackedDestOrders() {
 	console.log("will cancel " + Object.keys(assocDestOrdersBySourcePrice).length + " tracked dest orders");
@@ -346,33 +343,36 @@ async function onDestTrade(matches) {
 
 
 function startBittrexWs() {
-
+	return new Promise((resolve, reject)=>{
 		assocDestOrdersBySourcePrice = {};
-		bittrex_ws_client = new Bittrex_ws({
-    // websocket will be automatically reconnected if server does not respond to ping after 10s
-    pingTimeout:10000,
-    watchdog:{
-        // automatically reconnect if we don't receive markets data for 30min (this is the default)
-        markets:{
-            timeout:1800000,
-            reconnect:true
-        }
-    }
-});
+		try {
+			bittrex_ws_client = new Bittrex_ws({
+				// websocket will be automatically reconnected if server does not respond to ping after 10s
+				pingTimeout:10000,
+				watchdog:{
+					// automatically reconnect if we don't receive markets data for 30min (this is the default)
+					markets:{
+							timeout:1800000,
+							reconnect:true
+					}
+				}
+			});
+		} catch (e){
+			reject(e.toString());
+		}
+		bittrex_ws_client.on("connectionError", err => console.error('---- error from bittrex socket', err));
 
+		// handle trade events
+		bittrex_ws_client.on("trades", trade => console.error('trade', JSON.stringify(trade, null, '\t')));
 
- 
-bittrex_ws_client.on("connectionError", err => console.error('---- error from bittrex socket', err));
+		// handle level2 orderbook snapshots
+		bittrex_ws_client.on("orderBook", onSourceOrderbookSnapshot);
+		bittrex_ws_client.on("orderBookUpdate", onSourceOrderbookUpdate);
 
-	// handle trade events
-	bittrex_ws_client.on("trades", trade => console.error('trade', JSON.stringify(trade, null, '\t')));
-
-	// handle level2 orderbook snapshots
-	bittrex_ws_client.on("orderBook", onSourceOrderbookSnapshot);
-	bittrex_ws_client.on("orderBookUpdate", onSourceOrderbookUpdate);
-
-	console.log("=== Subscribing to 'BTC-GBYTE' pair");
-	bittrex_ws_client.subscribeToMarkets(['BTC-GBYTE']);
+		console.log("=== Subscribing to 'BTC-GBYTE' pair");
+		bittrex_ws_client.subscribeToMarkets(['BTC-GBYTE']);
+		resolve();
+	})
 
 }
 
@@ -383,80 +383,100 @@ bittrex_ws_client.on("connectionError", err => console.error('---- error from bi
 /**
  * headless wallet is ready
  */
-async function start(_conf) {
-	if (bStarted)
-		return console.log('already started');
-	bStarted = true;
-	Object.assign(conf, _conf);
-	await odex.start(conf);
-
-	orders = odex.orders;
-	ws_api = odex.ws_api;
-	balances = odex.balances;
-
-	await source.start();
-
-	ws_api.on('trades', (type, payload) => {
-		console.error('---- received trades', type, payload);
-	});
-	ws_api.on('orderbook', (type, {asks, bids}) => {
-		console.error('---- received orderbook', type, asks, bids);
-	});
-	ws_api.on('ohlcv', (type, payload) => {
-		console.error('---- received ohlcv', type, payload);
-	});
-	ws_api.on('orders', async (type, payload) => {
-		console.error('---- received orders', type, payload);
-		if (type === 'ORDER_CANCELLED')
-			console.log("order " + payload.hash + " at " + payload.price + " cancelled");
-		else if (type === 'ORDER_ADDED')
-			console.log("order " + payload.hash + " at " + payload.price + " added with status " + payload.status);
-		else if (type === 'ERROR') {
-			if (payload.match(/Cannot cancel order .+\. Status is FILLED/))
-				return console.error("attempting to cancel a filled order");
-			if (payload.match(/Cannot cancel order .+\. Status is CANCELLED/))
-				return console.error("attempting to cancel a cancelled order");
-			if (payload.match(/failed to find the order to be cancelled/))
-				return console.error("attempting to cancel a non-existent order");
-			console.error('latest dest balances', await balances.getBalances());
-			let matches = payload.match(/^Insufficient.+open orders:\n([^]*)$/);
-			if (matches) {
-				let arrLines = matches[1].split('\n');
-				let arrUnknownHashes = [];
-				arrLines.forEach(line => {
-					let hash = line.match(/^\S+/)[0];
-					if (!getDestOrderByHash(hash))
-						arrUnknownHashes.push(hash);
-				});
-				console.error("unknown orders: " + arrUnknownHashes.join(', '));
-				let arrSourcePrices = Object.keys(assocDestOrdersBySourcePrice);
-				arrSourcePrices.sort((a, b) => parseFloat(b) - parseFloat(a)); // reverse order
-				let arrDestOrders = arrSourcePrices.map(source_price => {
-					let dest_order = assocDestOrdersBySourcePrice[source_price];
-					return dest_order.hash + ": " + dest_order.size + " at " + source_price;
-				});
-				console.error("dest orders:\n" + arrDestOrders.join('\n'));
-			}
-		//	await cancelAllTrackedDestOrdersBeforeExiting();
-			process.exit(1);
+function start(_conf, EventBus) {
+	return new Promise(async (resolve, reject)=>{
+		if (bStarted){
+			console.log('already started');
+			return resolve();
 		}
-	});
-	ws_api.on('raw_orderbook', (type, payload) => {
-		console.error('---- received raw_orderbook', type, payload);
-	});
-	ws_api.on('orders', (type, payload) => {
-		console.error('---- received orders', type, payload);
-		if (type === 'ORDER_MATCHED')
-			onDestTrade(payload.matches);
-	});
-	ws_api.on('disconnected', onDestDisconnect);
-//	ws_api.on('reset_orders', resetDestOrders);
+		Object.assign(conf, _conf);
 
-	await ws_api.subscribeOrdersAndTrades(conf.dest_pair);
-	await orders.trackMyOrders();
-	await cancelAllDestOrders();
+		try {
+			await odex.start(conf);
+			orders = odex.orders;
+			ws_api = odex.ws_api;
+			balances = odex.balances;
+			await orders.trackMyOrders();
+		} catch(e){
+			return reject("Coudln't start Odex client: " + e.toString());
+		}
 
-	startBittrexWs();
+
+		await cancelAllDestOrders();
+
+		try {
+			await source.start(EventBus);
+		} catch(e){
+			return reject("Coudln't start Bittrex API client " + e.toString());
+		}
+
+		try{
+			await startBittrexWs();
+		} catch(e){
+			return reject("Couldn't start Bittrex WS " + e.toString());
+		}
+
+		bStarted = true;
+
+		ws_api.on('trades', (type, payload) => {
+			console.error('---- received trades', type, payload);
+		});
+		ws_api.on('orderbook', (type, {asks, bids}) => {
+			console.error('---- received orderbook', type, asks, bids);
+		});
+		ws_api.on('ohlcv', (type, payload) => {
+			console.error('---- received ohlcv', type, payload);
+		});
+		ws_api.on('orders', async (type, payload) => {
+			console.error('---- received orders', type, payload);
+			if (type === 'ORDER_CANCELLED')
+				console.log("order " + payload.hash + " at " + payload.price + " cancelled");
+			else if (type === 'ORDER_ADDED')
+				console.log("order " + payload.hash + " at " + payload.price + " added with status " + payload.status);
+			else if (type === 'ERROR') {
+				if (payload.match(/Cannot cancel order .+\. Status is FILLED/))
+					return console.error("attempting to cancel a filled order");
+				if (payload.match(/Cannot cancel order .+\. Status is CANCELLED/))
+					return console.error("attempting to cancel a cancelled order");
+				if (payload.match(/failed to find the order to be cancelled/))
+					return console.error("attempting to cancel a non-existent order");
+				console.error('latest dest balances', await balances.getBalances());
+				let matches = payload.match(/^Insufficient.+open orders:\n([^]*)$/);
+				if (matches) {
+					let arrLines = matches[1].split('\n');
+					let arrUnknownHashes = [];
+					arrLines.forEach(line => {
+						let hash = line.match(/^\S+/)[0];
+						if (!getDestOrderByHash(hash))
+							arrUnknownHashes.push(hash);
+					});
+					console.error("unknown orders: " + arrUnknownHashes.join(', '));
+					let arrSourcePrices = Object.keys(assocDestOrdersBySourcePrice);
+					arrSourcePrices.sort((a, b) => parseFloat(b) - parseFloat(a)); // reverse order
+					let arrDestOrders = arrSourcePrices.map(source_price => {
+						let dest_order = assocDestOrdersBySourcePrice[source_price];
+						return dest_order.hash + ": " + dest_order.size + " at " + source_price;
+					});
+					console.error("dest orders:\n" + arrDestOrders.join('\n'));
+				}
+			//	await cancelAllTrackedDestOrders();
+			}
+		});
+		ws_api.on('raw_orderbook', (type, payload) => {
+			console.error('---- received raw_orderbook', type, payload);
+		});
+		ws_api.on('orders', (type, payload) => {
+			console.error('---- received orders', type, payload);
+			if (type === 'ORDER_MATCHED')
+				onDestTrade(payload.matches);
+		});
+		ws_api.on('disconnected', onDestDisconnect);
+	//	ws_api.on('reset_orders', resetDestOrders);
+
+		await ws_api.subscribeOrdersAndTrades(conf.dest_pair);
+
+		resolve();
+	})
 }
 
 
@@ -464,9 +484,9 @@ async function stop(){
 	if (bExiting)
 		return;
 	bExiting = true;
-	await cancelAllTrackedDestOrdersBeforeExiting();
 	ws_api.removeAllListeners();
 	bittrex_ws_client.removeAllListeners();
+	await cancelAllTrackedDestOrders();
 	console.log("all orders cancelled");
 	bExiting = false;
 	bStarted = false;

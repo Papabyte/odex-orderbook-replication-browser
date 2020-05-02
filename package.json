@@ -8,6 +8,7 @@
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
+    "base64url": "^3.0.1",
     "buefy": "^0.8.16",
     "ccxt": "1.26.84",
     "core-js": "^3.6.4",
@@ -16,7 +17,10 @@
     "vue": "^2.6.11",
     "big.js": "^5.0.3",
     "browser-request": "^0.3.3",
-    "retry": "^0.10.1"
+    "retry": "^0.10.1",
+    "is-url": "^1.2.4",
+    "obyte": "^0.1.8",
+    "secp256k1": "^3.7.1"
   },
   "devDependencies": {
     "@vue/cli-plugin-babel": "^4.3.0",
@@ -36,7 +40,6 @@
       "plugin:vue/essential"
     ],
     "parserOptions": {
-      "parser": "babel-eslint"
     },
     "rules": {}
   },
