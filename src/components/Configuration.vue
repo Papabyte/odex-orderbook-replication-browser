@@ -26,7 +26,7 @@ export default {
 	},
 	data () {
 		return {
-			configuration: {},
+			configuration: {dest_pair:'GBYTE/BTC_20200701'},
 			owner_address_message: '',
 			revokeLink: false,
 			grantLink: false

@@ -6,14 +6,14 @@ const conf = require("./conf");
 const mutex = require("./mutex.js");
 const source = require("./source");
 
-let orders, ws_api, balances, bittrex_ws_client;
+let orders, ws_api, balances, bittrex_ws_client, exchange;
 
 let assocSourceBids = {};
 let assocSourceAsks = {};
 let assocDestOrdersBySourcePrice = {};
 let bExiting = false;
 let bStarted = false;
-
+let EventBus;
 
 function getDestOrderByHash(hash) {
 	for (let source_price in assocDestOrdersBySourcePrice) {
@@ -101,9 +101,10 @@ async function cancelDestOrder(source_price) {
 async function updateDestBids(bids) {
 	let unlock = await mutex.lock('bids');
 	let dest_balances = await balances.getBalances();
+	EventBus.$emit('dest_balances', dest_balances);
 	let source_balances = await source.getBalances();
 	console.error('dest balances', dest_balances);
-	let dest_quote_balance_available = 0//(dest_balances[conf.quote_currency] || 0)/1e8 - conf.MIN_QUOTE_BALANCE;
+	let dest_quote_balance_available = (dest_balances[conf.quote_currency] || 0)/1e8 - conf.MIN_QUOTE_BALANCE;
 	let source_base_balance_available = (source_balances.free.GBYTE || 0) - conf.MIN_BASE_BALANCE;
 	let arrNewOrders = [];
 	let bDepleted = (dest_quote_balance_available <= 0 || source_base_balance_available <= 0);
@@ -146,6 +147,7 @@ async function updateDestBids(bids) {
 async function updateDestAsks(asks) {
 	let unlock = await mutex.lock('asks');
 	let dest_balances = await balances.getBalances();
+	EventBus.$emit('dest_balances', dest_balances);
 	let source_balances = await source.getBalances();
 	console.error('dest balances', dest_balances);
 	let dest_base_balance_available = (dest_balances.GBYTE || 0)/1e9 - conf.MIN_BASE_BALANCE;
@@ -225,7 +227,11 @@ async function onSourceOrderbookSnapshot(snapshot) {
 	}
 	let arrNewBuyOrders = await updateDestBids(snapshot.data.bids);
 	let arrNewSellOrders = await updateDestAsks(snapshot.data.asks);
-	await createDestOrders(arrNewBuyOrders.concat(arrNewSellOrders));
+	try {
+		await createDestOrders(arrNewBuyOrders.concat(arrNewSellOrders));
+	} catch(e){
+		console.log("failed to create orders " + e)
+	}
 	unlock();
 }
 
@@ -266,25 +272,44 @@ async function onSourceOrderbookUpdate(update) {
 	await createDestOrders(arrNewBuyOrders.concat(arrNewSellOrders));
 	unlock();
 }
+let onResetOrdersSet = false;
 
 async function onDestDisconnect() {
+
+	if (onResetOrdersSet){
+		return console.log('onResetOrdersSet already set')
+	}
 	console.log("will cancel all dest orders after disconnect");
-	ws_api.on('reset_orders', async () => {
+
+	ws_api.once('reset_orders', onResetOrders);
+	onResetOrdersSet = true;
+	async function onResetOrders(){
 		console.log("reset_orders: will cancel all my dest orders after reconnect");
-		await cancelAllDestOrders();
+		try {
+			await cancelAllDestOrders();
+		} catch(e) {
+			console.log("couldn't cancel all dest orders on reset, will retry")
+			return setTimeout(onResetOrders, 1000)
+		}
 		console.log("done cancelling all my dest orders after reconnect");
 		await ws_api.subscribeOrdersAndTrades(conf.dest_pair);
 		await scanAndUpdateDestBids();
 		await scanAndUpdateDestAsks();
 		console.log("done updating dest orders after reconnect");
+	//	ws_api.removeEventListener('reset_orders', onResetOrders);
+		onResetOrdersSet = false;
 		unlock();
-	});
+	}
+
 	let unlock = await mutex.lock('update');
-	console.log("got lock to cancel all dest orders after disconnect");
-	await cancelAllTrackedDestOrders(); // this will be actually executed after reconnect
+	try{
+		console.log("got lock to cancel all dest orders after disconnect");
+		await cancelAllTrackedDestOrders(); // this will be actually executed after reconnect
+	} catch(e) {
+		return console.log("couldn't cancel all tracked orders");
+	}
 	assocDestOrdersBySourcePrice = {};
 	console.log("done cancelling all tracked dest orders after disconnect");
-//	await cancelAllDestOrders(); // just in case we have more orders there but generally this list should lag after tracked dest orders
 }
 
 /*
@@ -383,21 +408,25 @@ function startBittrexWs() {
 /**
  * headless wallet is ready
  */
-function start(_conf, EventBus) {
+function start(_conf, _EventBus) {
 	return new Promise(async (resolve, reject)=>{
 		if (bStarted){
-			console.log('already started');
-			return resolve();
+			return reject('already started');
 		}
-		Object.assign(conf, _conf);
+		bStarted = true;
 
+		Object.assign(conf, _conf);
+		EventBus = _EventBus;
+		console.log(conf);
 		try {
 			await odex.start(conf);
 			orders = odex.orders;
 			ws_api = odex.ws_api;
 			balances = odex.balances;
+			exchange= odex.exchange;
 			await orders.trackMyOrders();
 		} catch(e){
+			bStarted = false;
 			return reject("Coudln't start Odex client: " + e.toString());
 		}
 
@@ -407,16 +436,18 @@ function start(_conf, EventBus) {
 		try {
 			await source.start(EventBus);
 		} catch(e){
+			bStarted = false;
 			return reject("Coudln't start Bittrex API client " + e.toString());
 		}
 
 		try{
 			await startBittrexWs();
 		} catch(e){
+			bStarted = false;
+			source.stop();
 			return reject("Couldn't start Bittrex WS " + e.toString());
 		}
 
-		bStarted = true;
 
 		ws_api.on('trades', (type, payload) => {
 			console.error('---- received trades', type, payload);
@@ -429,6 +460,7 @@ function start(_conf, EventBus) {
 		});
 		ws_api.on('orders', async (type, payload) => {
 			console.error('---- received orders', type, payload);
+			EventBus.$emit('orders_updated', orders.assocMyOrders);
 			if (type === 'ORDER_CANCELLED')
 				console.log("order " + payload.hash + " at " + payload.price + " cancelled");
 			else if (type === 'ORDER_ADDED')
@@ -474,22 +506,38 @@ function start(_conf, EventBus) {
 	//	ws_api.on('reset_orders', resetDestOrders);
 
 		await ws_api.subscribeOrdersAndTrades(conf.dest_pair);
-
-		resolve();
+		const pairTokens = await exchange.getTokensByPair(conf.dest_pair);
+		resolve(pairTokens);
 	})
 }
 
 
 async function stop(){
-	if (bExiting)
-		return;
-	bExiting = true;
-	ws_api.removeAllListeners();
-	bittrex_ws_client.removeAllListeners();
-	await cancelAllTrackedDestOrders();
-	console.log("all orders cancelled");
-	bExiting = false;
-	bStarted = false;
+	return new Promise(async (resolve, reject)=>{
+		if (bExiting)
+			return reject('Already stopping');
+		if (!bStarted)
+			return reject('Not started');
+		bExiting = true;
+		source.stop();
+		bittrex_ws_client.removeAllListeners();
+		try{
+			await cancelAllTrackedDestOrders();
+		} catch(e){
+			bExiting = false;
+			bStarted = false;
+			odex.stop();
+			ws_api.removeAllListeners();
+			return reject("Orders couldn't be cancelled");
+		}
+		EventBus.$emit('orders_updated', {});
+		console.log("all orders cancelled");
+		bExiting = false;
+		bStarted = false;
+		odex.stop();
+		ws_api.removeAllListeners();
+		resolve();
+	})
 }
 
 

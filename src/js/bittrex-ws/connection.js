@@ -21,8 +21,7 @@ const DEFAULT_SOCKETTIMEOUT = 60 * 1000;
 // in case connection fails, how long should we wait before retrying ?
 const RETRY_DELAY = 10 * 1000;
 const RETRY_COUNT = {
-    // retry 11 times (this means that WS will try to connect for a maximum of 120s)
-    negotiate:11,
+    negotiate:-1,
     // only retry once for connect
     connect:1,
     // only retry once for start

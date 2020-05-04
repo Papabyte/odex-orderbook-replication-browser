@@ -1,4 +1,5 @@
 <template>
+<div>
 	<div class="tile is-ancestor">
 		<connections 
 			:is_editing_allowed="!is_started" 
@@ -18,12 +19,21 @@
 		<status 
 			:credentials="credentials" 
 			:connections="connections" 
-			:is_started="is_started" @start="start" 
+			:is_started="is_started" @start="start"
+			:pairTokens="pairTokens"
+			:configuration="configuration"
 			@stop="stop"
 		/>
-
-
 	</div>
+		<div class="tile is-ancestor">
+
+			<orders
+				:configuration="configuration"
+				:pairTokens="pairTokens"
+			/>
+	</div>
+	</div>
+
 </template>
 
 <script>
@@ -32,6 +42,8 @@ const replicate = require('../js/replicate.js');
 import Credentials from './Credentials.vue'
 import Connections from './Connections.vue'
 import Configuration from './Configuration.vue'
+import Orders from './Orders.vue'
+
 import { EventBus } from '../js/event-bus.js';
 
 import Status from './Status.vue'
@@ -42,39 +54,52 @@ export default {
 		Credentials,
 		Connections,
 		Configuration,
-		Status
+		Status,
+		Orders
 	},
 	data () {
 		return {
 			is_started: false,
 			credentials: {},
 			connections: {},
-			configuration: {}
+			configuration: {},
+			orders: {},
+			pairTokens: []
 		}
 	},
+		created() {
+
+	},
 	methods:{
-		start(){
+		async start(){
 			
-			replicate.start(
+			await replicate.start(
 				Object.assign({}, this.credentials, this.connections,  this.configuration),
 				EventBus
-				).then(()=>{
+				).then((pairTokens)=>{
+						this.pairTokens = pairTokens
 					this.is_started = true
 				}).catch(
 					(e)=>{
-						                this.$buefy.toast.open({
-                    duration: 5000,
-                    message: e.toString(),
-                    position: 'is-bottom',
-                    type: 'is-danger'
-                })
+						this.$buefy.toast.open({
+						duration: 5000,
+						message: e.toString(),
+						position: 'is-bottom',
+						type: 'is-danger'
+					})
 				})
+
 		},
 		stop(){
 			this.is_started = false
-			EventBus.$off()
-			replicate.stop()
-
+			replicate.stop().catch((e)=>{
+				this.$buefy.toast.open({
+					duration: 5000,
+					message: e.toString(),
+					position: 'is-bottom',
+					type: 'is-danger'
+				})
+			})
 		},
 		updateCredentials: function(credentials){
 			this.credentials = Object.assign({}, credentials) // we clone in a new object so watchers can see the change
@@ -84,10 +109,7 @@ export default {
 		},
 		updateConfiguration: function(configuration){
 			this.configuration = Object.assign({}, configuration) 
-		}
-
-
-		
+		}		
 	}
 }
 </script>

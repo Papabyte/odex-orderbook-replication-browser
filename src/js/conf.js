@@ -9,7 +9,7 @@ exports.testnet_protocol = "obyte-tn" ;
 exports.MARKUP = (typeof process.env.MARKUP !== 'undefined') ? parseFloat(process.env.MARKUP) : 2; // %
 
 exports.quote_currency = 'BTC_20200701';
-exports.dest_pair = 'GBYTE/' + exports.quote_currency;
+//exports.dest_pair = 'GBYTE/' + exports.quote_currency;
 
 exports.MIN_QUOTE_BALANCE = 0.001;
 exports.MIN_BASE_BALANCE = 0.01;

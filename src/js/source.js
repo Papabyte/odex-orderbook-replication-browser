@@ -5,6 +5,7 @@ const mutex = require("./mutex.js");
 let source_balances = null;
 
 let queued_amount = 0; // positive on the buy side
+let intervalId;
 
 console.log("conf.sourceApiKey" + conf.sourceApiKey);
 let bittrex;
@@ -35,7 +36,7 @@ async function createMarketTx(side, size) {
 	console.error('---- m_resp', m_resp);
 	source_balances = await bittrex.fetchBalance();	
 	if (EventBus)
-		EventBus.$emit('bittrex_balances', source_balances);
+		EventBus.$emit('source_balances', source_balances);
 	unlock();
 }
 
@@ -65,9 +66,15 @@ async function start(_EventBus) {
 		secret: conf.sourceApiSecret,
 	});
 	await updateBalances();
-	setInterval(updateBalances, 60 * 1000);
+	intervalId = setInterval(updateBalances, 60 * 1000);
+}
+
+function stop(){
+	clearInterval(intervalId);
+	
 }
 
 exports.start = start;
+exports.stop = stop
 exports.getBalances = getBalances;
 exports.createMarketTx = createMarketTx;
