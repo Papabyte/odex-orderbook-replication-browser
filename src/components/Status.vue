@@ -1,11 +1,14 @@
 <template>
 	<div class="tile is-3 is-parent">
 		<article class="tile is-child notification is-info">
-			<p class="title">Status</p>
-			Control address: <span class="is-size-7"> {{credentials.control_address || ''}}</span>
+			<p class="title is-5">Status</p>
+			<div class="is-size-6" style="margin-top:5px;"><b>Bittrex pair: 'BTC-GBYTE'</b></div>
+			<div class="is-size-6" style="margin-top:5px;"><b>Odex pair: 'GBYTE/{{configuration.destination_quote}}'</b></div>
+			<div class="is-size-6" style="margin-top:5px;"><b>Control address:</b> </div>
+				<div class="is-size-7"> {{credentials.control_address || ''}}</div>
 			<div style="margin-top:20px;">
-				<b-button v-if="!is_started" @click="$emit('start')">start</b-button>
-				<b-button v-if="is_started" @click="$emit('stop')">stop</b-button>
+				<b-button class="is-primary" v-if="!is_started" @click="$emit('start')">start</b-button>
+				<b-button class="is-primary" v-if="is_started" @click="$emit('stop')">stop</b-button>
 			</div>
 		<div v-if="source_balances">
 			<div class="is-size-6" style="margin-top:10px;"><b>Bittrex balances</b></div>
@@ -48,12 +51,12 @@
 
 <script>
 import { EventBus } from '../js/event-bus.js';
-import { aa_address } from '../conf.js'
 
 export default {
   props: {
 		connections: Object,
 		credentials: Object,
+		configuration: Object,
 		is_started: Boolean,
 		pairTokens: Array
 	},
@@ -81,6 +84,8 @@ export default {
 		credentials: function() {
 		},
 		connections: function() {
+		},
+		configuration: function() {
 		}
 		 
 	},

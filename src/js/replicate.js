@@ -18,8 +18,9 @@ let EventBus;
 function getDestOrderByHash(hash) {
 	for (let source_price in assocDestOrdersBySourcePrice) {
 		let dest_order = assocDestOrdersBySourcePrice[source_price];
-		if (dest_order.hash === hash)
+		if (dest_order.hash === hash){
 			return dest_order;
+		}
 	}
 	return null;
 }
@@ -54,11 +55,11 @@ async function createOrReplaceDestOrder(side, size, source_price) {
 		await orders.createAndSendCancel(dest_order.hash); // order cancelled or modified
 	}
 	let sign = (side === 'BUY') ? -1 : 1;
-	let dest_price = parseFloat(source_price) * (1 + sign * conf.MARKUP / 100);
+	let dest_price = parseFloat(source_price) * (1 + sign * conf.markup / 100);
 	console.log("will place " + side + " order for " + size + " GB at " + dest_price + " corresponding to source price " + source_price);
 	let hash = await orders.createAndSendOrder(conf.dest_pair, side, size, dest_price);
 	console.log("sent order " + hash);
-	assocDestOrdersBySourcePrice[source_price] = { hash, size };
+	assocDestOrdersBySourcePrice[source_price] = { hash, size, price: source_price };
 }
 
 async function createDestOrders(arrNewOrders) {
@@ -121,7 +122,7 @@ async function updateDestBids(bids) {
 			console.log("bid #" + i + ": " + size + " GB at " + source_price + " but have only " + source_base_balance_available + " GB available on source");
 			size = source_base_balance_available;
 		}
-		let dest_price = parseFloat(source_price) * (1 - conf.MARKUP / 100);
+		let dest_price = parseFloat(source_price) * (1 - conf.markup / 100);
 		let dest_quote_amount_required = size * dest_price;
 		if (dest_quote_amount_required > dest_quote_balance_available) {
 			bDepleted = true;
@@ -208,74 +209,96 @@ async function scanAndUpdateDestAsks() {
 }
 
 async function onSourceOrderbookSnapshot(snapshot) {
-	let unlock = await mutex.lock('update');
 	console.error('received snapshot');
 	assocSourceBids = {};
 	assocSourceAsks = {};
-	snapshot.data.bids.forEach(bid => {
-		assocSourceBids[bid.price] = bid.size;
-	});
-	snapshot.data.asks.forEach(ask => {
-		assocSourceAsks[ask.price] = ask.size;
-	});
-	// in case a secondary (non-initial) snapshot is received, we need to check if we missed some updates
-	for (let source_price in assocDestOrdersBySourcePrice) {
-		if (!assocSourceBids[source_price] && !assocSourceAsks[source_price]) {
-			console.log("order at " + source_price + " not found in new snapshot from source, will cancel on dest");
-			await cancelDestOrder(source_price);
-		}
-	}
-	let arrNewBuyOrders = await updateDestBids(snapshot.data.bids);
-	let arrNewSellOrders = await updateDestAsks(snapshot.data.asks);
+	let arrOrdersToBeCancelled = [];
+
 	try {
-		await createDestOrders(arrNewBuyOrders.concat(arrNewSellOrders));
+		snapshot.data.bids.forEach(bid => {
+			assocSourceBids[bid.price] = bid.size;
+		});
+		snapshot.data.asks.forEach(ask => {
+			assocSourceAsks[ask.price] = ask.size;
+		});
+		// in case a secondary (non-initial) snapshot is received, we need to check if we missed some updates
+		for (let source_price in assocDestOrdersBySourcePrice) {
+			if (!assocSourceBids[source_price] && !assocSourceAsks[source_price]) {
+				console.log("order at " + source_price + " not found in new snapshot from source, will cancel on dest");
+		//		await cancelDestOrder(source_price);
+			arrOrdersToBeCancelled.push(bid.price);
+
+			}
+		}
 	} catch(e){
-		console.log("failed to create orders " + e)
+		console.log('failed onSourceOrderbookSnapshot ' + e.toString());
+		return unlock();
 	}
-	unlock();
+
+	if (ws_api.isConnected()){
+		let unlock = await mutex.lock('update');
+		for (var i = 0; i< arrOrdersToBeCancelled.length; i++) 
+			await cancelDestOrder(arrOrdersToBeCancelled[i]);
+		let arrNewBuyOrders = await updateDestBids(snapshot.data.bids);
+		let arrNewSellOrders = await updateDestAsks(snapshot.data.asks);
+		await createDestOrders(arrNewBuyOrders.concat(arrNewSellOrders));
+		unlock();
+	}
 }
 
 async function onSourceOrderbookUpdate(update) {
-	let unlock = await mutex.lock('update');
-	console.error('update', JSON.stringify(update, null, '\t'));
 	let arrNewBuyOrders = [];
 	let arrNewSellOrders = [];
-	if (update.data.bids.length > 0) {
-		for (let i = 0; i < update.data.bids.length; i++) {
-			let bid = update.data.bids[i];
-			let size = parseFloat(bid.size);
-			if (size === 0) {
-				console.log("bid at " + bid.price + " removed from source, will cancel on dest");
-				delete assocSourceBids[bid.price];
-				await cancelDestOrder(bid.price);
+	let arrOrdersToBeCancelled = [];
+	try { // we will catch error if object received is badly formatted
+		if (update.data.bids.length > 0) {
+			for (let i = 0; i < update.data.bids.length; i++) {
+				let bid = update.data.bids[i];
+				let size = parseFloat(bid.size);
+				if (size === 0) {
+					console.log("bid at " + bid.price + " removed from source, will cancel on dest");
+					delete assocSourceBids[bid.price];
+					arrOrdersToBeCancelled.push(bid.price);
+				}
+				else
+					assocSourceBids[bid.price] = bid.size;
 			}
-			else
-				assocSourceBids[bid.price] = bid.size;
 		}
+		if (update.data.asks.length > 0) {
+			for (let i = 0; i < update.data.asks.length; i++) {
+				let ask = update.data.asks[i];
+				let size = parseFloat(ask.size);
+				if (size === 0) {
+					console.log("ask at " + ask.price + " removed from source, will cancel on dest");
+					delete assocSourceAsks[ask.price];
+					arrOrdersToBeCancelled.push(ask.price);
+				}
+				else
+					assocSourceAsks[ask.price] = ask.size;
+			}
+		}
+	} catch (e){
+		console.log("Failed onSourceOrderbookUpdate " + e.toString())
+		return;
+	}
+
+	if (ws_api.isConnected()){
+		let unlock = await mutex.lock('update');
 		arrNewBuyOrders = await scanAndUpdateDestBids();
-	}
-	if (update.data.asks.length > 0) {
-		for (let i = 0; i < update.data.asks.length; i++) {
-			let ask = update.data.asks[i];
-			let size = parseFloat(ask.size);
-			if (size === 0) {
-				console.log("ask at " + ask.price + " removed from source, will cancel on dest");
-				delete assocSourceAsks[ask.price];
-				await cancelDestOrder(ask.price);
-			}
-			else
-				assocSourceAsks[ask.price] = ask.size;
-		}
 		arrNewSellOrders = await scanAndUpdateDestAsks();
+		// we cancel all removed/updated orders first, then create new ones to avoid overlapping prices and self-trades
+		for (var i = 0; i< arrOrdersToBeCancelled.length; i++) 
+			await cancelDestOrder(arrOrdersToBeCancelled[i]);
+
+		await createDestOrders(arrNewBuyOrders.concat(arrNewSellOrders));
+		unlock();
 	}
-	// we cancel all removed/updated orders first, then create new ones to avoid overlapping prices and self-trades
-	await createDestOrders(arrNewBuyOrders.concat(arrNewSellOrders));
-	unlock();
 }
+
 let onResetOrdersSet = false;
 
 async function onDestDisconnect() {
-
+	EventBus.$emit('onDestDisconnect');
 	if (onResetOrdersSet){
 		return console.log('onResetOrdersSet already set')
 	}
@@ -285,12 +308,8 @@ async function onDestDisconnect() {
 	onResetOrdersSet = true;
 	async function onResetOrders(){
 		console.log("reset_orders: will cancel all my dest orders after reconnect");
-		try {
-			await cancelAllDestOrders();
-		} catch(e) {
-			console.log("couldn't cancel all dest orders on reset, will retry")
-			return setTimeout(onResetOrders, 1000)
-		}
+		await cancelAllTrackedDestOrders(); // this will be actually executed after reconnect
+		assocDestOrdersBySourcePrice = {};
 		console.log("done cancelling all my dest orders after reconnect");
 		await ws_api.subscribeOrdersAndTrades(conf.dest_pair);
 		await scanAndUpdateDestBids();
@@ -302,32 +321,22 @@ async function onDestDisconnect() {
 	}
 
 	let unlock = await mutex.lock('update');
-	try{
-		console.log("got lock to cancel all dest orders after disconnect");
-		await cancelAllTrackedDestOrders(); // this will be actually executed after reconnect
-	} catch(e) {
-		return console.log("couldn't cancel all tracked orders");
-	}
+	console.log("got lock to cancel all dest orders after disconnect");
+	await cancelAllTrackedDestOrders(); // this will be actually executed after reconnect
 	assocDestOrdersBySourcePrice = {};
 	console.log("done cancelling all tracked dest orders after disconnect");
 }
 
-/*
-async function resetDestOrders() {
-	console.log("will reset all dest orders after reconnect");
-	let unlock = await mutex.lock('update');
-	assocDestOrdersBySourcePrice = {};
-	await cancelAllDestOrders();
-	await scanAndUpdateDestBids();
-	await scanAndUpdateDestAsks();
-	unlock();
-}*/
 
 async function onDestTrade(matches) {
 	console.log("dest trade", JSON.stringify(matches, null, '\t'));
 	let size = 0;
+	let averagePrice;
+	let lowestPrice;
+	let highestPrice;
 	let side;
 	let role;
+
 	for (let i = 0; i < matches.trades.length; i++){
 		let trade = matches.trades[i];
 		let dest_order = getDestOrderByHash(trade.makerOrderHash);
@@ -352,19 +361,44 @@ async function onDestTrade(matches) {
 				dest_order.filled = true;
 			}
 		}
-		if (dest_order)
+		if (dest_order) {
+			let price = parseFloat(dest_order.price);
+			if (!averagePrice)
+				averagePrice = price;
+			else
+				averagePrice = (averagePrice * size + trade.amount * price) / (averagePrice * size);
 			size += trade.amount;
+
+			if (!lowestPrice || price < lowestPrice)
+				lowestPrice = price;
+			if (!highestPrice || price > highestPrice)
+				highestPrice = price;
+		}
 	}
 	if (size && !side)
 		throw Error("no side");
 	if (size) {
 		size /= 1e9;
-		console.log("detected fill of my " + side + " " + size + " GB on dest exchange, will do the opposite on source exchange");
-		await source.createMarketTx(side === 'BUY' ? 'SELL' : 'BUY', size);
+		console.log("detected fill of my " + side + " " + size + " GB on dest exchange at average price " + averagePrice + ", will do the opposite on source exchange");
+		EventBus.$emit('trade', {
+			type: 'dest',
+			side,
+			size,
+			price: averagePrice
+		});
+		if (side === 'BUY'){
+			let sell_limit_coeff = (1 - conf.markup / 100) * (1 - conf.LIMIT_MARGIN / 100);
+			await source.createLimitTx('SELL', size, sell_limit_coeff * lowestPrice);
+		} else {
+			let buy_limit_coeff = (1 + conf.markup / 100) * (1 + conf.LIMIT_MARGIN / 100);
+			await source.createLimitTx('BUY', size, buy_limit_coeff *  highestPrice);
+		}
+		
 	}
 	else
 		console.log("no my orders or duplicate");
 }
+
 
 
 function startBittrexWs() {
@@ -402,9 +436,6 @@ function startBittrexWs() {
 }
 
 
-
-
-
 /**
  * headless wallet is ready
  */
@@ -417,6 +448,7 @@ function start(_conf, _EventBus) {
 
 		Object.assign(conf, _conf);
 		EventBus = _EventBus;
+
 		console.log(conf);
 		try {
 			await odex.start(conf);
@@ -432,6 +464,7 @@ function start(_conf, _EventBus) {
 
 
 		await cancelAllDestOrders();
+		assocDestOrdersBySourcePrice = {};
 
 		try {
 			await source.start(EventBus);
@@ -498,9 +531,10 @@ function start(_conf, _EventBus) {
 			console.error('---- received raw_orderbook', type, payload);
 		});
 		ws_api.on('orders', (type, payload) => {
-			console.error('---- received orders', type, payload);
-			if (type === 'ORDER_MATCHED')
+			if (type === 'ORDER_MATCHED'){
+				console.error('---- received matches', type, payload.matches);
 				onDestTrade(payload.matches);
+			}
 		});
 		ws_api.on('disconnected', onDestDisconnect);
 	//	ws_api.on('reset_orders', resetDestOrders);
@@ -521,21 +555,16 @@ async function stop(){
 		bExiting = true;
 		source.stop();
 		bittrex_ws_client.removeAllListeners();
-		try{
-			await cancelAllTrackedDestOrders();
-		} catch(e){
-			bExiting = false;
-			bStarted = false;
-			odex.stop();
-			ws_api.removeAllListeners();
-			return reject("Orders couldn't be cancelled");
-		}
+		await cancelAllTrackedDestOrders();
+		bExiting = false;
+		bStarted = false;
+		odex.stop();
+		ws_api.removeAllListeners();
 		EventBus.$emit('orders_updated', {});
 		console.log("all orders cancelled");
 		bExiting = false;
 		bStarted = false;
 		odex.stop();
-		ws_api.removeAllListeners();
 		resolve();
 	})
 }

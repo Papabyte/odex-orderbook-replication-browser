@@ -16,22 +16,24 @@
 			:connections="connections" 
 			@onFormChange="updateConfiguration($event)
 		"/>
-		<status 
+			<status 
 			:credentials="credentials" 
-			:connections="connections" 
-			:is_started="is_started" @start="start"
+			:connections="connections"
+			:is_started="is_started" 
 			:pairTokens="pairTokens"
 			:configuration="configuration"
+			@start="start"
 			@stop="stop"
 		/>
 	</div>
-		<div class="tile is-ancestor">
+			<div class="tile is-ancestor">
 
 			<orders
 				:configuration="configuration"
 				:pairTokens="pairTokens"
 			/>
-	</div>
+			<trades/>
+		</div>
 	</div>
 
 </template>
@@ -43,6 +45,7 @@ import Credentials from './Credentials.vue'
 import Connections from './Connections.vue'
 import Configuration from './Configuration.vue'
 import Orders from './Orders.vue'
+import Trades from './Trades.vue'
 
 import { EventBus } from '../js/event-bus.js';
 
@@ -55,7 +58,8 @@ export default {
 		Connections,
 		Configuration,
 		Status,
-		Orders
+		Orders,
+		Trades
 	},
 	data () {
 		return {
@@ -64,7 +68,7 @@ export default {
 			connections: {},
 			configuration: {},
 			orders: {},
-			pairTokens: []
+			pairTokens: [],
 		}
 	},
 		created() {
@@ -72,7 +76,13 @@ export default {
 	},
 	methods:{
 		async start(){
-			
+			if (!this.configuration.bComplete)
+				this.popToast('Configuration is not complete')
+			if (!this.credentials.bComplete)
+				this.popToast('Credentials are not complete')
+			if (!this.connections.bComplete)
+				this.popToast('Connections are not complete')
+
 			await replicate.start(
 				Object.assign({}, this.credentials, this.connections,  this.configuration),
 				EventBus
@@ -81,24 +91,14 @@ export default {
 					this.is_started = true
 				}).catch(
 					(e)=>{
-						this.$buefy.toast.open({
-						duration: 5000,
-						message: e.toString(),
-						position: 'is-bottom',
-						type: 'is-danger'
-					})
+						this.popToast(e)
 				})
 
 		},
 		stop(){
 			this.is_started = false
 			replicate.stop().catch((e)=>{
-				this.$buefy.toast.open({
-					duration: 5000,
-					message: e.toString(),
-					position: 'is-bottom',
-					type: 'is-danger'
-				})
+				this.popToast(e.toString())
 			})
 		},
 		updateCredentials: function(credentials){
@@ -109,7 +109,15 @@ export default {
 		},
 		updateConfiguration: function(configuration){
 			this.configuration = Object.assign({}, configuration) 
-		}		
+		},
+		popToast: function(message){
+			this.$buefy.toast.open({
+				duration: 5000,
+				message,
+				position: 'is-bottom',
+				type: 'is-danger'
+			})
+		}
 	}
 }
 </script>

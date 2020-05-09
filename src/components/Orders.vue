@@ -1,14 +1,18 @@
 <template>
-	<div class="tile is-6 is-parent">
+	<div  class="tile is-6 is-parent">
 		<article class="tile is-child notification is-info">
-			<p class="title">Orders on {{configuration.dest_pair}}</p>
-			<div class="columns">
+			<p class="title is-5">Orders on {{configuration.dest_pair}}</p>
+
+			<div v-if="asks.length>0 || bids.length>0" class="columns">
 				<div class="column">
 					<b-table :data="bids" :columns="[{field: 'amount', label:'Amount'},{field:'price',label: 'Price'}]"></b-table>
 				</div>
 				<div class="column">
 					<b-table :data="asks" :columns="[{field: 'price', label: 'Price'},{field:'amount', label:'Amount'}]"></b-table>
 				</div>
+			</div>
+			<div v-else>
+				No order placed on Odex
 			</div>
 		</article>
 	</div>

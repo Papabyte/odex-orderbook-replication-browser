@@ -1,7 +1,7 @@
 <template>
 	<div class="tile is-3 is-parent">
 		<article class="tile is-child notification is-info">
-			<p class="title">Credentials</p>
+			<p class="title  is-5">Credentials</p>
 			<b-field label="wif" :message="wif_message">
 				<b-input @input="onChange" v-model="credentials.wif" type="password" autocomplete="off" :disabled="!is_editing_allowed || are_credentials_saved"></b-input>
 			</b-field>
@@ -100,7 +100,7 @@ export default {
 			else {
 				this.api_secret_message = ''
 			}
-			this.credentials.complete = this.is_form_complete = bComplete
+			this.credentials.bComplete = this.is_form_complete = bComplete
 			this.$emit("onFormChange", this.credentials)
 		}
 	}

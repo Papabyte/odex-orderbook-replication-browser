@@ -1,7 +1,7 @@
 <template>
 	<div class="tile is-3 is-parent">
 		<article class="tile is-child notification is-info">
-			<p class="title">Connections</p>
+			<p class="title is-5">Connections</p>
 			<b-field label="Odex ws URL" :message="odex_ws_message">
 				<b-input @input="onChange" v-model="connections.odex_ws_url"  :disabled="!is_editing_allowed"></b-input>
 			</b-field>
@@ -111,7 +111,7 @@ export default {
 			else {
 				this.hub_ws_message = ''
 			}
-			this.connections.complete = bComplete
+			this.connections.bComplete = bComplete
 			if (bComplete)
 				this.saveConnections();
 			this.$emit("onFormChange", this.connections)

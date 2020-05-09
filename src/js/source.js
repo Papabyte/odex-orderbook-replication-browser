@@ -5,13 +5,16 @@ const mutex = require("./mutex.js");
 let source_balances = null;
 
 let queued_amount = 0; // positive on the buy side
+let queuedlowestPrice;
+let queuedHighestPrice;
+
 let intervalId;
 
-console.log("conf.sourceApiKey" + conf.sourceApiKey);
 let bittrex;
 let EventBus;
 
-async function createMarketTx(side, size) {
+async function createLimitTx(side, size, price) {
+
 	if (side === 'BUY')
 		size += queued_amount;
 	else
@@ -20,25 +23,93 @@ async function createMarketTx(side, size) {
 		size = -size;
 		side = (side === 'BUY') ? 'SELL' : 'BUY';
 	}
-	if (size < conf.MIN_SOURCE_ORDER_SIZE) {
+
+	if (!queuedlowestPrice || price < queuedlowestPrice)
+		queuedlowestPrice = price;
+	if (!queuedHighestPrice || price > queuedHighestPrice)
+		queuedHighestPrice = price;
+
+	const min_btc_value = conf.BITTREX_MIN_SIZE_ORDER_SAT / 10**8;
+	const min_source_order_size = side === 'BUY' ? min_btc_value / queuedHighestPrice : min_btc_value / queuedlowestPrice;
+
+	if (size < min_source_order_size) {
 		queued_amount = (side === 'BUY') ? size : -size;
-		return console.log("amount " + size + " is less than source min order size, will queue");
+		return console.log("amount " + size + " is less than source min order size " + min_source_order_size + ", will queue");
 	}
+
 	queued_amount = 0;
-	let unlock = await mutex.lock('source_balances');
-	if (!conf.testnet){
-	let m_resp = (side === 'BUY') 
-		? await bittrex.createMarketBuyOrder('GBYTE/BTC', size)
-		: await bittrex.createMarketSellOrder('GBYTE/BTC', size);
+
+	if (side === 'BUY'){
+		let max_limit_buy_price = source_balances.free.BTC / size * 0.997; // Bittrex fees
+		let limit_buy_price = queuedHighestPrice < max_limit_buy_price ? queuedHighestPrice : max_limit_buy_price;
+		sendLimitOrderReliably(side, size, limit_buy_price, 3);
 	} else {
-		console.log("testnet - won't send order, side: " + side + " size: " + size);
+		sendLimitOrderReliably(side, size, queuedlowestPrice, 3);
 	}
-	console.error('---- m_resp', m_resp);
-	source_balances = await bittrex.fetchBalance();	
+
+	queuedlowestPrice = null;
+	queuedHighestPrice = null;
+	
+	let unlock = await mutex.lock('source_balances');
+	try {
+		source_balances = await bittrex.fetchBalance();
+	} catch (e) {
+		console.log("error when feetching balance: " + e.toString());
+	}
+
 	if (EventBus)
 		EventBus.$emit('source_balances', source_balances);
 	unlock();
 }
+
+
+async function sendLimitOrderReliably(side, size, price, retry){
+
+	if (conf.testnet) {
+		EventBus.$emit('trade', {
+			type: 'source',
+			side,
+			size,
+			price,
+			time: new Date(),
+			status: 'testnet - fake',
+		});
+		console.log("tesnet won't send order side: " + side + ", size: " + size + ", price: " + price);
+		return;
+	}
+	const delayInSeconds = 10;
+	try {
+		if (side == 'BUY')
+			await bittrex.createLimitBuyOrder('GBYTE/BTC', size, price);
+		else
+			await bittrex.createLimitSellOrder('GBYTE/BTC', size, price);
+	} catch(e){
+		EventBus.$emit('trade', {
+			type: 'source',
+			side,
+			size,
+			price,
+			time: new Date(),
+			status: retry > 0 ? 'failed - will retry' : 'failed - abandoned',
+			error: e
+		});
+		if (retry > 0)
+			setTimeout(function(){
+				retry--;
+				sendLimitOrderReliably(side, size, price, retry);
+			}, delayInSeconds * 1000)
+		return;
+	}
+	EventBus.$emit('trade', {
+		type: 'source',
+		side,
+		size,
+		price,
+		time: new Date(),
+		status: 'placed'
+	});
+}
+
 
 async function getBalances() {
 	let unlock = await mutex.lock('source_balances');
@@ -77,4 +148,4 @@ function stop(){
 exports.start = start;
 exports.stop = stop
 exports.getBalances = getBalances;
-exports.createMarketTx = createMarketTx;
+exports.createLimitTx = createLimitTx;
