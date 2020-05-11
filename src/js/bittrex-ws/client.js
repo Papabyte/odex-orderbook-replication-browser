@@ -1,5 +1,8 @@
+/* 
+*	code from https://github.com/aloysius-pgast/bittrex-signalr-client
+*	modified to run in browser
+*/ 
 "use strict";
-//const WebSocket = require('ws');
 const _ = require('lodash');
 const util = require('util');
 const Big = require('big.js');

@@ -5,11 +5,12 @@
 			<div class="is-size-6" style="margin-top:5px;"><b>Bittrex pair: 'BTC-GBYTE'</b></div>
 			<div class="is-size-6" style="margin-top:5px;"><b>Odex pair: 'GBYTE/{{configuration.destination_quote}}'</b></div>
 			<div class="is-size-6" style="margin-top:5px;"><b>Control address:</b> </div>
-				<div class="is-size-7"> {{credentials.control_address || ''}}</div>
-			<div style="margin-top:20px;">
+			<div class="is-size-7"> {{credentials.control_address || ''}}</div>
+			<div v-if="!isStarting" style="margin-top:20px;">
 				<b-button class="is-primary" v-if="!is_started" @click="$emit('start')">start</b-button>
 				<b-button class="is-primary" v-if="is_started" @click="$emit('stop')">stop</b-button>
 			</div>
+			<b-loading :is-full-page="false" :active.sync="isStarting" :can-cancel="false"></b-loading>
 		<div v-if="source_balances">
 			<div class="is-size-6" style="margin-top:10px;"><b>Bittrex balances</b></div>
 			<div class="is-size-7"><b>GBYTE</b></div>
@@ -58,7 +59,8 @@ export default {
 		credentials: Object,
 		configuration: Object,
 		is_started: Boolean,
-		pairTokens: Array
+		pairTokens: Array,
+		isStarting: Boolean
 	},
 	data () {
 			return {

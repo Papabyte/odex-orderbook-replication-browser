@@ -19,7 +19,7 @@
 				<b-numberinput @input="onChange" v-model="configuration.min_base_balance"  :disabled="!is_editing_allowed"  :min="0" :step="0.1"></b-numberinput>
 			</b-field>
 			<b-field label="Markup (in %)">
-				<b-numberinput @input="onChange" v-model="configuration.markup"  :disabled="!is_editing_allowed" :min="0" :max="100" :step="0.1"></b-numberinput>
+				<b-numberinput @input="onChange" v-model="configuration.markup"  :disabled="!is_editing_allowed" :min="0" :max="99" :step="0.1"></b-numberinput>
 			</b-field>
 		</article>
 	</div>
@@ -55,7 +55,6 @@ export default {
 		this.configuration.owner_address = localStorage.getItem('owner_address') || ''
 		this.configuration.min_quote_balance = Number(localStorage.getItem('min_quote_balance')) || 0.01
 		this.configuration.min_base_balance  = Number(localStorage.getItem('min_base_balance')) || 0.1
-		this.configuration.min_source_order_size = Number(localStorage.getItem('min_source_order_size')) || 0.2
 		this.configuration.markup = Number(localStorage.getItem('markup')) || 2
 		this.configuration.destination_quote = localStorage.getItem('destination_quote') || "BTC_20200701"
 		this.onChange()
@@ -97,7 +96,7 @@ export default {
 
 			this.configuration.dest_pair = 'GBYTE/' + this.configuration.destination_quote
 
-			if (!this.configuration.min_quote_balance || !this.configuration.min_base_balance || !this.configuration.markup) 
+			if (this.configuration.min_quote_balance === null || this.configuration.min_base_balance === null|| this.configuration.markup === null) 
 				bComplete = false
 			this.configuration.bComplete = bComplete
 			if (bComplete)

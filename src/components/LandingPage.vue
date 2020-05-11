@@ -2,16 +2,16 @@
 <div>
 	<div class="tile is-ancestor">
 		<connections 
-			:is_editing_allowed="!is_started" 
+			:is_editing_allowed="!is_started && !is_starting" 
 			@onFormChange="updateConnections($event)"
 		/>
 		<credentials 
-			:is_editing_allowed="!is_started" 
+			:is_editing_allowed="!is_started && !is_starting" 
 			:connections="connections" 
 			@onFormChange="updateCredentials($event)"
 		/>
 		<configuration 
-			:is_editing_allowed="!is_started" 
+			:is_editing_allowed="!is_started && !is_starting" 
 			:credentials="credentials"
 			:connections="connections" 
 			@onFormChange="updateConfiguration($event)
@@ -24,15 +24,15 @@
 			:configuration="configuration"
 			@start="start"
 			@stop="stop"
+			:isStarting="is_starting"
 		/>
 	</div>
-			<div class="tile is-ancestor">
-
-			<orders
-				:configuration="configuration"
-				:pairTokens="pairTokens"
-			/>
-			<trades/>
+	<div class="tile is-ancestor">
+		<orders
+			:configuration="configuration"
+			:pairTokens="pairTokens"
+		/>
+		<trades/>
 		</div>
 	</div>
 
@@ -46,6 +46,7 @@ import Connections from './Connections.vue'
 import Configuration from './Configuration.vue'
 import Orders from './Orders.vue'
 import Trades from './Trades.vue'
+import CorsModal from './CorsModal.vue'
 
 import { EventBus } from '../js/event-bus.js';
 
@@ -64,17 +65,39 @@ export default {
 	data () {
 		return {
 			is_started: false,
+			is_starting: false,
 			credentials: {},
 			connections: {},
 			configuration: {},
 			orders: {},
 			pairTokens: [],
+			isCorsModalOpen: false
 		}
 	},
 	created() {
 		EventBus.$on('error', (err)=>{
-			this.popToast(error)
+			this.popToast(err)
 		})
+		EventBus.$on('CORS_error', (err)=>{
+			if (this.isCorsModalOpen)
+				return;
+			this.stop()
+			this.isCorsModalOpen = true
+			this.$buefy.modal.open({
+				parent: this,
+				component: CorsModal,
+				hasModalCard: true,
+				onCancel:()=>{
+					this.isCorsModalOpen = false
+				},
+				customClass: 'custom-class custom-class-2'
+			})
+		})
+
+		window.onbeforeunload = async (event)=>{ // event triggered on browser exit
+			if(this.is_started)
+				await this.stop();
+		}
 	},
 	methods:{
 		async start(){
@@ -84,24 +107,29 @@ export default {
 				this.popToast('Credentials are not complete')
 			if (!this.connections.bComplete)
 				this.popToast('Connections are not complete')
-
-			await replicate.start(
+			this.is_starting = true;
+			replicate.start(
 				Object.assign({}, this.credentials, this.connections,  this.configuration),
 				EventBus
 				).then((pairTokens)=>{
-						this.pairTokens = pairTokens
+					this.pairTokens = pairTokens
 					this.is_started = true
+					this.is_starting = false
 				}).catch(
 					(e)=>{
 						this.popToast(e)
+						this.is_starting = false
 				})
 
 		},
-		stop(){
-			this.is_started = false
-			replicate.stop().catch((e)=>{
+		async stop(){
+			try{
+				await replicate.stop()
+			} catch(e){
 				this.popToast(e.toString())
-			})
+			}
+			this.is_started = false
+
 		},
 		updateCredentials: function(credentials){
 			this.credentials = Object.assign({}, credentials) // we clone in a new object so watchers can see the change

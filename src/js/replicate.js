@@ -14,6 +14,8 @@ let assocDestOrdersBySourcePrice = {};
 let bExiting = false;
 let bStarted = false;
 let vueEventBus;
+let assocCheckCancellingTimerIds = {};
+let assocOrdersToBeCancelled = {};
 
 function getDestOrderByHash(hash) {
 	for (let source_price in assocDestOrdersBySourcePrice) {
@@ -25,20 +27,18 @@ function getDestOrderByHash(hash) {
 	return null;
 }
 
-
 async function cancelAllTrackedDestOrders() {
 	console.log("will cancel " + Object.keys(assocDestOrdersBySourcePrice).length + " tracked dest orders");
 	let lastError = null;
 	for (let source_price in assocDestOrdersBySourcePrice) {
 		let dest_order = assocDestOrdersBySourcePrice[source_price];
 		console.log("cancelling order " + dest_order.hash);
+		delete assocDestOrdersBySourcePrice[source_price];
+		cancelOrderAndCheckLater(dest_order.hash);
 		var err = await orders.createAndSendCancel(dest_order.hash);
-		if(err) {
-			console.log("cancelling order " + dest_order.hash + " failed");
-			lastError = err;
-		}
-		else 
-			delete assocDestOrdersBySourcePrice[source_price];
+		if(err)
+			console.log("cancelling order " + dest_order.hash + " failed " + err);
+
 	}
 	return lastError;
 }
@@ -47,6 +47,7 @@ async function cancelAllDestOrders() {
 	console.log("will cancel " + Object.keys(orders.assocMyOrders).length + " dest orders");
 	var bAllDestOrdersCancelled = true;
 	for (let hash in orders.assocMyOrders){
+		cancelOrderAndCheckLater(hash);
 		await orders.createAndSendCancel(hash)
 	}
 	return bAllDestOrdersCancelled;
@@ -61,12 +62,11 @@ async function createOrReplaceDestOrder(side, size, source_price) {
 			return console.log("order " + size + " GB at source price " + source_price + " already exists");
 		// size changed, cancel the old order first
 		console.log("will cancel previous " + side + " order at source price " + source_price);
+		delete assocDestOrdersBySourcePrice[source_price];
+		cancelOrderAndCheckLater(dest_order.hash);
 		const err = await orders.createAndSendCancel(dest_order.hash);
 		if (err) // order cancelled or modified
 			console.log("error when cancelling "  + dest_order.hash + " " + err);
-		else
-			delete assocDestOrdersBySourcePrice[source_price];
-
 	}
 	let sign = (side === 'BUY') ? -1 : 1;
 	let dest_price = parseFloat(source_price) * (1 + sign * conf.markup / 100);
@@ -100,6 +100,7 @@ async function cancelPreviousDestOrderIfChanged(side, size, source_price) {
 	}
 	// size changed, cancel the old order first
 	console.log("will cancel previous " + side + " order at source price " + source_price);
+	cancelOrderAndCheckLater(dest_order.hash);
 	return !await orders.createAndSendCancel(dest_order.hash); // order cancelled or modified
 	//return true;
 }
@@ -109,11 +110,12 @@ async function cancelDestOrder(source_price) {
 	if (dest_order) {
 		
 		console.log("will cancel order " + dest_order.hash + " at source price " + source_price);
+		delete assocDestOrdersBySourcePrice[source_price];
+		cancelOrderAndCheckLater(dest_order.hash);
+
 		const err = await orders.createAndSendCancel(dest_order.hash)
 		if (err)
 			console.log('Error when cancelling ' + dest_order.hash +': ' + err);
-		else
-			delete assocDestOrdersBySourcePrice[source_price];
 	} //else
 	//	console.log("no dest order at source price " + source_price);
 }
@@ -125,8 +127,8 @@ async function updateDestBids(bids) {
 	vueEventBus.$emit('dest_balances', dest_balances);
 	let source_balances = await source.getBalances();
 	console.error('dest balances', dest_balances);
-	let dest_quote_balance_available = (dest_balances[conf.quote_currency] || 0)/1e8 - conf.MIN_QUOTE_BALANCE;
-	let source_base_balance_available = (source_balances.free.GBYTE || 0) - conf.MIN_BASE_BALANCE;
+	let dest_quote_balance_available = (dest_balances[conf.quote_currency] || 0)/1e8 - conf.min_quote_balance;
+	let source_base_balance_available = (source_balances.free.GBYTE || 0) - conf.min_base_balance;
 	let arrNewOrders = [];
 	let bDepleted = (dest_quote_balance_available <= 0 || source_base_balance_available <= 0);
 	for (let i = 0; i < bids.length; i++){
@@ -171,8 +173,8 @@ async function updateDestAsks(asks) {
 	vueEventBus.$emit('dest_balances', dest_balances);
 	let source_balances = await source.getBalances();
 	console.error('dest balances', dest_balances);
-	let dest_base_balance_available = (dest_balances.GBYTE || 0)/1e9 - conf.MIN_BASE_BALANCE;
-	let source_quote_balance_available = (source_balances.free.BTC || 0) - conf.MIN_QUOTE_BALANCE;
+	let dest_base_balance_available = (dest_balances.GBYTE || 0)/1e9 - conf.min_base_balance;
+	let source_quote_balance_available = (source_balances.free.BTC || 0) - conf.min_quote_balance;
 	let arrNewOrders = [];
 	let bDepleted = (dest_base_balance_available <=0 || source_quote_balance_available <= 0);
 	for (let i = 0; i < asks.length; i++){
@@ -434,8 +436,12 @@ function startBittrexWs() {
 		} catch (e){
 			reject(e.toString());
 		}
-		bittrex_ws_client.on("connectionError", err => console.error('---- error from bittrex socket', err));
+		bittrex_ws_client.on("connectionError", function(objError){
+			console.log(objError.error.error)
+			if (objError.error && objError.error.error.includes('CORS'))
+				vueEventBus.$emit('CORS_error');
 
+		})//
 		// handle trade events
 		bittrex_ws_client.on("trades", trade => console.error('trade', JSON.stringify(trade, null, '\t')));
 
@@ -448,6 +454,12 @@ function startBittrexWs() {
 		resolve();
 	})
 
+}
+
+function refreshDashboardOrdersOnNextick(){
+	setTimeout(function(){
+		vueEventBus.$emit('orders_updated', orders.assocMyOrders);
+	}, 0);
 }
 
 
@@ -519,19 +531,22 @@ function start(_conf, _vueEventBus) {
 		});
 		ws_api.on('orders', async (type, payload) => {
 			console.error('---- received orders', type, payload);
-			setTimeout(function(){
-				vueEventBus.$emit('orders_updated', orders.assocMyOrders);
-			}, 0);
+			refreshDashboardOrdersOnNextick();
 
-			if (type === 'ORDER_CANCELLED')
+			if (type === 'ORDER_CANCELLED'){
+				delete assocOrdersToBeCancelled[payload.hash];
 				console.log("order " + payload.hash + " at " + payload.price + " cancelled");
+			}
 			else if (type === 'ORDER_ADDED')
 				console.log("order " + payload.hash + " at " + payload.price + " added with status " + payload.status);
 			else if (type === 'ERROR') {
 				if (payload.match(/Cannot cancel order .+\. Status is FILLED/))
 					return console.error("attempting to cancel a filled order");
-				if (payload.match(/Cannot cancel order .+\. Status is CANCELLED/))
+				if (payload.match(/Cannot cancel order .+\. Status is CANCELLED/)){
+					const hash = payload.replace("Cannot cancel order ", "").replace(". Status is CANCELLED", "");
+					delete assocOrdersToBeCancelled[hash];
 					return console.error("attempting to cancel a cancelled order");
+				}
 				if (payload.match(/failed to find the order to be cancelled/))
 					return console.error("attempting to cancel a non-existent order");
 				console.error('latest dest balances', await balances.getBalances());
@@ -569,9 +584,36 @@ function start(_conf, _vueEventBus) {
 	//	ws_api.on('reset_orders', resetDestOrders);
 
 		await ws_api.subscribeOrdersAndTrades(conf.dest_pair);
-
+		assocOrdersToBeCancelled = {};
 		resolve(pairTokens);
 	})
+}
+
+async function cancelOrderAndCheckLater(hash, timerId){
+
+	function setCheckingCallback(){
+			var nextTimerId = setTimeout(function(){
+			cancelOrderAndCheckLater(hash, nextTimerId);
+			}, 20000);
+			assocCheckCancellingTimerIds[nextTimerId] = true;
+	}
+	if (!timerId){
+		assocOrdersToBeCancelled[hash] = true;
+		var err = await orders.createAndSendCancel(hash);
+		if(err) {
+			console.log("cancelling order " + hash + " failed");
+		}
+		setCheckingCallback();
+	} else {
+		delete assocCheckCancellingTimerIds[timerId];
+		if (assocOrdersToBeCancelled[hash]){
+			vueEventBus.$emit('error', hash + " wasn't cancelled");
+			orders.createAndSendCancel(hash);
+			setCheckingCallback();
+		} else {
+			console.log("cancelling order " + hash + " was confirmed by Odex");
+		}
+	}
 }
 
 
@@ -584,19 +626,22 @@ async function stop(){
 		bExiting = true;
 		source.stop();
 		bittrex_ws_client.removeAllListeners();
-		const err = await cancelAllTrackedDestOrders();
-		if (err)
-			vueEventBus.$emit('error', "Some orders weren't canceled on exit : " + err);
-		else
-			vueEventBus.$emit('orders_updated', {});
 
-		bExiting = false;
-		bStarted = false;
-		odex.stop();
-		console.log("all orders cancelled");
-		bExiting = false;
-		bStarted = false;
-		resolve();
+		await cancelAllTrackedDestOrders();
+
+		setTimeout(function(){
+			const nonCancelledOrdersLength = Object.keys(assocOrdersToBeCancelled).length;
+			if (nonCancelledOrdersLength > 0)
+				vueEventBus.$emit('error', nonCancelledOrdersLength + " Odex order" + (nonCancelledOrdersLength > 1 ? "s weren't" : " wasn't") + " cancelled on exit");
+			refreshDashboardOrdersOnNextick();
+			odex.stop();
+			for (var key in assocCheckCancellingTimerIds){
+				clearTimeout(key);
+			}
+			bExiting = false;
+			bStarted = false;
+			resolve()
+		}, 2000)
 	})
 }
 

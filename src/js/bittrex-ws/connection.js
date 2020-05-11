@@ -1,11 +1,12 @@
+/* 
+*	code from https://github.com/aloysius-pgast/bittrex-signalr-client
+*	modified to run in browser
+*/ 
 "use strict";
 const WebSocket = window.WebSocket;
 const request = require('browser-request');
-const util = require('util');
 const retry = require('retry');
 const querystring = require('querystring');
-const debug = require('debug')('BittrexSignalRClient:Connection');
-//const cloudScraper = require('cloudscraper');
 const _ = require('lodash');
 const EventEmitter = require('events');
 
