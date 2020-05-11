@@ -8,6 +8,7 @@
     "lint": "vue-cli-service lint"
   },
   "dependencies": {
+    "@mdi/font": "^5.1.45",
     "base64url": "^3.0.1",
     "big.js": "^5.0.3",
     "browser-request": "^0.3.3",

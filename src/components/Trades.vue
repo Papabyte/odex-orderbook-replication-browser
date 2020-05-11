@@ -7,7 +7,7 @@
 					{field: 'place', label:'Place'},
 					{field:'side',label: 'Side'},
 					{field:'size',label: 'Size'},
-					{field:'status',label: 'Status'},
+					{field:'price',label: 'Price'},
 					{field:'time',label: 'Time'}
 					]" paginated :per-page="10"></b-table>
 				</div>
@@ -34,10 +34,10 @@ export default {
 		EventBus.$on('trade', (trade)=>{
 			trade.time = trade.time.toISOString();
 			trade.place = trade.type == 'source' ? 'Bittrex' :'Odex';
+			trade.price = trade.type == 'source' ? null : trade.price;
 			trade.size += 'GB';
 			if (trade.error)
 				trade.status = 	trade.error.name + ' - ' + trade.status;
-			for (var i=0; i<100;i++)
 			this.trades.push(trade);
 		})
 	},

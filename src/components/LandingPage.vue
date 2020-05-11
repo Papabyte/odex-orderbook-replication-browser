@@ -71,8 +71,10 @@ export default {
 			pairTokens: [],
 		}
 	},
-		created() {
-
+	created() {
+		EventBus.$on('error', (err)=>{
+			this.popToast(error)
+		})
 	},
 	methods:{
 		async start(){

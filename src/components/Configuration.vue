@@ -19,7 +19,7 @@
 				<b-numberinput @input="onChange" v-model="configuration.min_base_balance"  :disabled="!is_editing_allowed"  :min="0" :step="0.1"></b-numberinput>
 			</b-field>
 			<b-field label="Markup (in %)">
-				<b-numberinput @input="onChange" v-model="configuration.markup"  :disabled="!is_editing_allowed" :min="0" :step="0.1"></b-numberinput>
+				<b-numberinput @input="onChange" v-model="configuration.markup"  :disabled="!is_editing_allowed" :min="0" :max="100" :step="0.1"></b-numberinput>
 			</b-field>
 		</article>
 	</div>
@@ -87,6 +87,12 @@ export default {
 				if (this.credentials.control_address && this.credentials.control_address.length > 0)
 					this.createAuthorizeAndRevokeLinks()
 				this.owner_address_message = ''
+			}
+			if(!this.configuration.destination_quote.length){
+				this.destination_quote_message = 'not valid'
+				bComplete = false
+			} else {
+				this.destination_quote_message = ''
 			}
 
 			this.configuration.dest_pair = 'GBYTE/' + this.configuration.destination_quote

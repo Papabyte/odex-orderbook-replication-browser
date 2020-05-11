@@ -11,7 +11,7 @@ let queuedHighestPrice;
 let intervalId;
 
 let bittrex;
-let EventBus;
+let vueEventBus;
 
 async function createLimitTx(side, size, price) {
 
@@ -57,8 +57,8 @@ async function createLimitTx(side, size, price) {
 		console.log("error when feetching balance: " + e.toString());
 	}
 
-	if (EventBus)
-		EventBus.$emit('source_balances', source_balances);
+	if (vueEventBus)
+		vueEventBus.$emit('source_balances', source_balances);
 	unlock();
 }
 
@@ -66,7 +66,7 @@ async function createLimitTx(side, size, price) {
 async function sendLimitOrderReliably(side, size, price, retry){
 
 	if (conf.testnet) {
-		EventBus.$emit('trade', {
+		vueEventBus.$emit('trade', {
 			type: 'source',
 			side,
 			size,
@@ -84,7 +84,7 @@ async function sendLimitOrderReliably(side, size, price, retry){
 		else
 			await bittrex.createLimitSellOrder('GBYTE/BTC', size, price);
 	} catch(e){
-		EventBus.$emit('trade', {
+		vueEventBus.$emit('trade', {
 			type: 'source',
 			side,
 			size,
@@ -100,7 +100,7 @@ async function sendLimitOrderReliably(side, size, price, retry){
 			}, delayInSeconds * 1000)
 		return;
 	}
-	EventBus.$emit('trade', {
+	vueEventBus.$emit('trade', {
 		type: 'source',
 		side,
 		size,
@@ -125,13 +125,13 @@ async function updateBalances() {
 	catch (e) {
 		console.error("error from fetchBalance: " + e)
 	}
-	if (EventBus)
-		EventBus.$emit('source_balances', source_balances);
+	if (vueEventBus)
+		vueEventBus.$emit('source_balances', source_balances);
 	unlock();
 }
 
-async function start(_EventBus) {
-	EventBus = _EventBus;
+async function start(_vueEventBus) {
+	vueEventBus = _vueEventBus;
 	bittrex = new ccxt.bittrex({
 		apiKey: conf.sourceApiKey,
 		secret: conf.sourceApiSecret,

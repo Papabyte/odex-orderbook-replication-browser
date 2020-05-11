@@ -20,7 +20,7 @@
 
 <script>
 import { EventBus } from '../js/event-bus.js';
-
+import { MAX_PRICE_PRECISION } from '../js/conf.js'
 export default {
   props: {
 		is_editing_allowed: Boolean,
@@ -30,29 +30,31 @@ export default {
 	},
 	data () {
 			return {
-				pair: 'GBYTE/BTC_20200701',
 				asks: [],
 				bids: [],
 			}
 		},
 	created() {
 		EventBus.$on('orders_updated', (orders)=>{
-			let baseMultiplier = 10 ** this.pairTokens[0].decimals;
+			let baseMultiplier = 10 ** this.pairTokens[0].decimals
+			let priceMultiplier = 10 * (this.pairTokens[0].decimals - this.pairTokens[1].decimals)
 			this.asks = [];
 			this.bids = [];
 			for (var key in orders){
 				var order = orders[key]
-				if (order.pairName != this.pair)
+				if (order.pairName != this.configuration.dest_pair)
 					continue
+				let price = (order.price * priceMultiplier).toPrecision(MAX_PRICE_PRECISION)
 				if (order.side == 'SELL')
-					this.asks.push({price: order.price, amount: order.amount/baseMultiplier})
+					this.asks.push({price: price, amount: order.amount/baseMultiplier})
 				if (order.side == 'BUY')
-					this.bids.push({price: order.price, amount: order.amount/baseMultiplier})
+					this.bids.push({price: price, amount: order.amount/baseMultiplier})
 			}
 		})
 	},
 	watch:{
-		 
+		configuration: function() {
+		}
 	},
 	methods:{
 	

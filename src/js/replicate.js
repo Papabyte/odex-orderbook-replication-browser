@@ -13,7 +13,7 @@ let assocSourceAsks = {};
 let assocDestOrdersBySourcePrice = {};
 let bExiting = false;
 let bStarted = false;
-let EventBus;
+let vueEventBus;
 
 function getDestOrderByHash(hash) {
 	for (let source_price in assocDestOrdersBySourcePrice) {
@@ -28,18 +28,28 @@ function getDestOrderByHash(hash) {
 
 async function cancelAllTrackedDestOrders() {
 	console.log("will cancel " + Object.keys(assocDestOrdersBySourcePrice).length + " tracked dest orders");
+	let lastError = null;
 	for (let source_price in assocDestOrdersBySourcePrice) {
 		let dest_order = assocDestOrdersBySourcePrice[source_price];
 		console.log("cancelling order " + dest_order.hash);
-		await orders.createAndSendCancel(dest_order.hash);
+		var err = await orders.createAndSendCancel(dest_order.hash);
+		if(err) {
+			console.log("cancelling order " + dest_order.hash + " failed");
+			lastError = err;
+		}
+		else 
+			delete assocDestOrdersBySourcePrice[source_price];
 	}
-	assocDestOrdersBySourcePrice = {};
+	return lastError;
 }
 
 async function cancelAllDestOrders() {
 	console.log("will cancel " + Object.keys(orders.assocMyOrders).length + " dest orders");
-	for (let hash in orders.assocMyOrders)
-		await orders.createAndSendCancel(hash);
+	var bAllDestOrdersCancelled = true;
+	for (let hash in orders.assocMyOrders){
+		await orders.createAndSendCancel(hash)
+	}
+	return bAllDestOrdersCancelled;
 }
 
 async function createOrReplaceDestOrder(side, size, source_price) {
@@ -51,15 +61,23 @@ async function createOrReplaceDestOrder(side, size, source_price) {
 			return console.log("order " + size + " GB at source price " + source_price + " already exists");
 		// size changed, cancel the old order first
 		console.log("will cancel previous " + side + " order at source price " + source_price);
-		delete assocDestOrdersBySourcePrice[source_price];
-		await orders.createAndSendCancel(dest_order.hash); // order cancelled or modified
+		const err = await orders.createAndSendCancel(dest_order.hash);
+		if (err) // order cancelled or modified
+			console.log("error when cancelling "  + dest_order.hash + " " + err);
+		else
+			delete assocDestOrdersBySourcePrice[source_price];
+
 	}
 	let sign = (side === 'BUY') ? -1 : 1;
 	let dest_price = parseFloat(source_price) * (1 + sign * conf.markup / 100);
 	console.log("will place " + side + " order for " + size + " GB at " + dest_price + " corresponding to source price " + source_price);
 	let hash = await orders.createAndSendOrder(conf.dest_pair, side, size, dest_price);
-	console.log("sent order " + hash);
-	assocDestOrdersBySourcePrice[source_price] = { hash, size, price: source_price };
+	if (hash) {
+		console.log("sent order " + hash);
+		assocDestOrdersBySourcePrice[source_price] = { hash, size, price: source_price };
+	} else {
+		console.log("send order failed");
+	}
 }
 
 async function createDestOrders(arrNewOrders) {
@@ -82,27 +100,29 @@ async function cancelPreviousDestOrderIfChanged(side, size, source_price) {
 	}
 	// size changed, cancel the old order first
 	console.log("will cancel previous " + side + " order at source price " + source_price);
-	delete assocDestOrdersBySourcePrice[source_price];
-	await orders.createAndSendCancel(dest_order.hash); // order cancelled or modified
-	return true;
+	return !await orders.createAndSendCancel(dest_order.hash); // order cancelled or modified
+	//return true;
 }
 
 async function cancelDestOrder(source_price) {
 	let dest_order = assocDestOrdersBySourcePrice[source_price];
 	if (dest_order) {
-		delete assocDestOrdersBySourcePrice[source_price];
+		
 		console.log("will cancel order " + dest_order.hash + " at source price " + source_price);
-		await orders.createAndSendCancel(dest_order.hash);
-	}
-//	else
-//		console.log("no dest order at source price " + source_price);
+		const err = await orders.createAndSendCancel(dest_order.hash)
+		if (err)
+			console.log('Error when cancelling ' + dest_order.hash +': ' + err);
+		else
+			delete assocDestOrdersBySourcePrice[source_price];
+	} //else
+	//	console.log("no dest order at source price " + source_price);
 }
 
 
 async function updateDestBids(bids) {
 	let unlock = await mutex.lock('bids');
 	let dest_balances = await balances.getBalances();
-	EventBus.$emit('dest_balances', dest_balances);
+	vueEventBus.$emit('dest_balances', dest_balances);
 	let source_balances = await source.getBalances();
 	console.error('dest balances', dest_balances);
 	let dest_quote_balance_available = (dest_balances[conf.quote_currency] || 0)/1e8 - conf.MIN_QUOTE_BALANCE;
@@ -148,7 +168,7 @@ async function updateDestBids(bids) {
 async function updateDestAsks(asks) {
 	let unlock = await mutex.lock('asks');
 	let dest_balances = await balances.getBalances();
-	EventBus.$emit('dest_balances', dest_balances);
+	vueEventBus.$emit('dest_balances', dest_balances);
 	let source_balances = await source.getBalances();
 	console.error('dest balances', dest_balances);
 	let dest_base_balance_available = (dest_balances.GBYTE || 0)/1e9 - conf.MIN_BASE_BALANCE;
@@ -226,19 +246,18 @@ async function onSourceOrderbookSnapshot(snapshot) {
 			if (!assocSourceBids[source_price] && !assocSourceAsks[source_price]) {
 				console.log("order at " + source_price + " not found in new snapshot from source, will cancel on dest");
 		//		await cancelDestOrder(source_price);
-			arrOrdersToBeCancelled.push(bid.price);
+			arrOrdersToBeCancelled.push(source_price);
 
 			}
 		}
 	} catch(e){
 		console.log('failed onSourceOrderbookSnapshot ' + e.toString());
-		return unlock();
 	}
 
 	if (ws_api.isConnected()){
-		let unlock = await mutex.lock('update');
 		for (var i = 0; i< arrOrdersToBeCancelled.length; i++) 
-			await cancelDestOrder(arrOrdersToBeCancelled[i]);
+			cancelDestOrder(arrOrdersToBeCancelled[i]);
+		let unlock = await mutex.lockOrSkip('update');
 		let arrNewBuyOrders = await updateDestBids(snapshot.data.bids);
 		let arrNewSellOrders = await updateDestAsks(snapshot.data.asks);
 		await createDestOrders(arrNewBuyOrders.concat(arrNewSellOrders));
@@ -283,13 +302,12 @@ async function onSourceOrderbookUpdate(update) {
 	}
 
 	if (ws_api.isConnected()){
-		let unlock = await mutex.lock('update');
+		for (var i = 0; i< arrOrdersToBeCancelled.length; i++)
+				cancelDestOrder(arrOrdersToBeCancelled[i]);
+		let unlock = await mutex.lockOrSkip('update');
 		arrNewBuyOrders = await scanAndUpdateDestBids();
 		arrNewSellOrders = await scanAndUpdateDestAsks();
 		// we cancel all removed/updated orders first, then create new ones to avoid overlapping prices and self-trades
-		for (var i = 0; i< arrOrdersToBeCancelled.length; i++) 
-			await cancelDestOrder(arrOrdersToBeCancelled[i]);
-
 		await createDestOrders(arrNewBuyOrders.concat(arrNewSellOrders));
 		unlock();
 	}
@@ -298,7 +316,7 @@ async function onSourceOrderbookUpdate(update) {
 let onResetOrdersSet = false;
 
 async function onDestDisconnect() {
-	EventBus.$emit('onDestDisconnect');
+	vueEventBus.$emit('onDestDisconnect');
 	if (onResetOrdersSet){
 		return console.log('onResetOrdersSet already set')
 	}
@@ -322,9 +340,6 @@ async function onDestDisconnect() {
 
 	let unlock = await mutex.lock('update');
 	console.log("got lock to cancel all dest orders after disconnect");
-	await cancelAllTrackedDestOrders(); // this will be actually executed after reconnect
-	assocDestOrdersBySourcePrice = {};
-	console.log("done cancelling all tracked dest orders after disconnect");
 }
 
 
@@ -380,11 +395,12 @@ async function onDestTrade(matches) {
 	if (size) {
 		size /= 1e9;
 		console.log("detected fill of my " + side + " " + size + " GB on dest exchange at average price " + averagePrice + ", will do the opposite on source exchange");
-		EventBus.$emit('trade', {
+		vueEventBus.$emit('trade', {
 			type: 'dest',
 			side,
 			size,
-			price: averagePrice
+			price: averagePrice,
+			time: new Date()
 		});
 		if (side === 'BUY'){
 			let sell_limit_coeff = (1 - conf.markup / 100) * (1 - conf.LIMIT_MARGIN / 100);
@@ -403,7 +419,6 @@ async function onDestTrade(matches) {
 
 function startBittrexWs() {
 	return new Promise((resolve, reject)=>{
-		assocDestOrdersBySourcePrice = {};
 		try {
 			bittrex_ws_client = new Bittrex_ws({
 				// websocket will be automatically reconnected if server does not respond to ping after 10s
@@ -439,7 +454,7 @@ function startBittrexWs() {
 /**
  * headless wallet is ready
  */
-function start(_conf, _EventBus) {
+function start(_conf, _vueEventBus) {
 	return new Promise(async (resolve, reject)=>{
 		if (bStarted){
 			return reject('already started');
@@ -447,7 +462,7 @@ function start(_conf, _EventBus) {
 		bStarted = true;
 
 		Object.assign(conf, _conf);
-		EventBus = _EventBus;
+		vueEventBus = _vueEventBus;
 
 		console.log(conf);
 		try {
@@ -462,13 +477,23 @@ function start(_conf, _EventBus) {
 			return reject("Coudln't start Odex client: " + e.toString());
 		}
 
+		try {
+			var pairTokens = await exchange.getTokensByPair(conf.dest_pair);
+		} catch(e){
+			odex.stop();
+			bStarted = false;
+			return reject(conf.dest_pair + " doesn't exist on Odex");
+		}
 
-		await cancelAllDestOrders();
+		if (!await cancelAllDestOrders())
+			return reject("Coudln't cancel previous orders");
+
 		assocDestOrdersBySourcePrice = {};
 
 		try {
-			await source.start(EventBus);
+			await source.start(vueEventBus);
 		} catch(e){
+			odex.stop();
 			bStarted = false;
 			return reject("Coudln't start Bittrex API client " + e.toString());
 		}
@@ -476,8 +501,9 @@ function start(_conf, _EventBus) {
 		try{
 			await startBittrexWs();
 		} catch(e){
-			bStarted = false;
+			odex.stop();
 			source.stop();
+			bStarted = false;
 			return reject("Couldn't start Bittrex WS " + e.toString());
 		}
 
@@ -493,7 +519,10 @@ function start(_conf, _EventBus) {
 		});
 		ws_api.on('orders', async (type, payload) => {
 			console.error('---- received orders', type, payload);
-			EventBus.$emit('orders_updated', orders.assocMyOrders);
+			setTimeout(function(){
+				vueEventBus.$emit('orders_updated', orders.assocMyOrders);
+			}, 0);
+
 			if (type === 'ORDER_CANCELLED')
 				console.log("order " + payload.hash + " at " + payload.price + " cancelled");
 			else if (type === 'ORDER_ADDED')
@@ -540,7 +569,7 @@ function start(_conf, _EventBus) {
 	//	ws_api.on('reset_orders', resetDestOrders);
 
 		await ws_api.subscribeOrdersAndTrades(conf.dest_pair);
-		const pairTokens = await exchange.getTokensByPair(conf.dest_pair);
+
 		resolve(pairTokens);
 	})
 }
@@ -555,16 +584,18 @@ async function stop(){
 		bExiting = true;
 		source.stop();
 		bittrex_ws_client.removeAllListeners();
-		await cancelAllTrackedDestOrders();
+		const err = await cancelAllTrackedDestOrders();
+		if (err)
+			vueEventBus.$emit('error', "Some orders weren't canceled on exit : " + err);
+		else
+			vueEventBus.$emit('orders_updated', {});
+
 		bExiting = false;
 		bStarted = false;
 		odex.stop();
-		ws_api.removeAllListeners();
-		EventBus.$emit('orders_updated', {});
 		console.log("all orders cancelled");
 		bExiting = false;
 		bStarted = false;
-		odex.stop();
 		resolve();
 	})
 }
