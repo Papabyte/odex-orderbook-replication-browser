@@ -12,7 +12,7 @@
 				</div>
 			</div>
 			<div v-else>
-				No order placed on Odex
+				No orders placed on Odex
 			</div>
 		</article>
 	</div>
@@ -29,11 +29,11 @@ export default {
 		configuration: Object
 	},
 	data () {
-			return {
-				asks: [],
-				bids: [],
-			}
-		},
+		return {
+			asks: [],
+			bids: [],
+		}
+	},
 	created() {
 		EventBus.$on('orders_updated', (orders)=>{
 			let baseMultiplier = 10 ** this.pairTokens[0].decimals
@@ -54,6 +54,8 @@ export default {
 	},
 	watch:{
 		configuration: function() {
+		},
+		pairTokens: function(){
 		}
 	},
 	methods:{

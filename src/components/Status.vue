@@ -70,17 +70,12 @@ export default {
 			}
 		},
 	created() {
-
-				EventBus.$on('source_balances', (source_balances)=>{
-										console.log('source_balances')
-
-					this.source_balances = source_balances;
-				})
-				EventBus.$on('dest_balances', (dest_balances)=>{
-										console.log('dest_balances')
-
-					this.dest_balances = dest_balances;
-				})
+		EventBus.$on('source_balances', (source_balances)=>{
+			this.source_balances = source_balances;
+		})
+		EventBus.$on('dest_balances', (dest_balances)=>{
+			this.dest_balances = dest_balances;
+		})
 	},
 	watch:{
 		credentials: function() {

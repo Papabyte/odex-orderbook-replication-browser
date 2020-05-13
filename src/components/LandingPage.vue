@@ -76,7 +76,7 @@ export default {
 	},
 	created() {
 		EventBus.$on('error', (err)=>{
-			this.popToast(err)
+			this.popToast(err, true)
 		})
 		EventBus.$on('CORS_error', (err)=>{
 			if (this.isCorsModalOpen)
@@ -113,6 +113,8 @@ export default {
 				EventBus
 				).then((pairTokens)=>{
 					this.pairTokens = pairTokens
+					console.log(pairTokens)
+					console.log('pairTokens')
 					this.is_started = true
 					this.is_starting = false
 				}).catch(
@@ -140,10 +142,11 @@ export default {
 		updateConfiguration: function(configuration){
 			this.configuration = Object.assign({}, configuration) 
 		},
-		popToast: function(message){
+		popToast: function(message, bDontQueue){
 			this.$buefy.toast.open({
 				duration: 5000,
 				message,
+				queue: !bDontQueue,
 				position: 'is-bottom',
 				type: 'is-danger'
 			})
