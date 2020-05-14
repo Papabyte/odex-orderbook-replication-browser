@@ -111,17 +111,15 @@ export default {
 			replicate.start(
 				Object.assign({}, this.credentials, this.connections,  this.configuration),
 				EventBus
-				).then((pairTokens)=>{
-					this.pairTokens = pairTokens
-					console.log(pairTokens)
-					console.log('pairTokens')
-					this.is_started = true
+			).then((pairTokens)=>{
+				this.pairTokens = pairTokens
+				this.is_started = true
+				this.is_starting = false
+			}).catch(
+				(e)=>{
+					this.popToast(e)
 					this.is_starting = false
-				}).catch(
-					(e)=>{
-						this.popToast(e)
-						this.is_starting = false
-				})
+			})
 
 		},
 		async stop(){

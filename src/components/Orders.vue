@@ -50,6 +50,13 @@ export default {
 				if (order.side == 'BUY')
 					this.bids.push({price: price, amount: order.amount/baseMultiplier})
 			}
+			this.asks.sort((a,b)=>{
+				return a. price - b.price
+			})
+			this.bids.sort((a,b)=>{
+				return b. price - a.price
+			})
+
 		})
 	},
 	watch:{

@@ -2,23 +2,55 @@
 	<div class="tile is-3 is-parent">
 		<article class="tile is-child notification is-info">
 			<p class="title  is-5">Configuration</p>
-			<b-field label="Odex quote" :message="destination_quote_message">
+			<b-field label="Odex BTC stable coin symbol" :message="destination_quote_message">
 				<b-input @input="onChange" v-model="configuration.destination_quote"  :disabled="!is_editing_allowed"></b-input>
 			</b-field>
-			<b-field label="Owner address" :message="owner_address_message">
+			<b-field :message="owner_address_message">
+				<template slot="label">
+					Owner address
+					<b-tooltip type="is-dark" label="Address of your Odex account, used to deposit and withdraw funds">
+						<b-icon size="is-small" icon="help-circle-outline"></b-icon>
+					</b-tooltip>
+				</template>
 				<b-input @input="onChange" v-model="configuration.owner_address"  :disabled="!is_editing_allowed"></b-input>
 			</b-field>
 			<div>
-				<a v-if="grantLink"  :href="grantLink" target="_blank">Grant</a>
-				<a v-if="revokeLink" style="margin-left:20px;" :href="revokeLink" target="_blank">Revoke</a>
+				<div v-if="grantLink && revokeLink">
+					<a  :href="grantLink" target="_blank">Grant</a>
+					<b-tooltip style="margin-left:5px;" type="is-dark" label="Open your Obyte wallet and send a transaction that grants trading right to your control address">
+						<b-icon size="is-small" icon="help-circle-outline"></b-icon>
+					</b-tooltip>
+					<a v-if="revokeLink" style="margin-left:20px;" :href="revokeLink" target="_blank">Revoke</a>
+					<b-tooltip style="margin-left:5px;" type="is-dark" label="Open your Obyte wallet and send a transaction that revokes trading right of your control address">
+						<b-icon size="is-small" icon="help-circle-outline"></b-icon>
+					</b-tooltip>
+				</div>
 			</div>
-			<b-field label="Quote balance minimum" >
+			<b-field style="margin-top:10px;" >
+				<template slot="label">
+					BTC balance minimum
+					<b-tooltip type="is-dark" label="Minimum balance in BTC or BTC stablecoin to keep free on Odex and Bittrex">
+						<b-icon size="is-small" icon="help-circle-outline"></b-icon>
+					</b-tooltip>
+				</template>
 				<b-numberinput @input="onChange" v-model="configuration.min_quote_balance"  :disabled="!is_editing_allowed" :min="0" :step="0.01"></b-numberinput>
 			</b-field>
-			<b-field label="Base balance minimum" >
+			<b-field >
+				<template slot="label">
+				GBYTE balance minimum
+				<b-tooltip type="is-dark" label="Minimum balance in GB to keep free on Odex and Bittrex">
+						<b-icon size="is-small" icon="help-circle-outline"></b-icon>
+					</b-tooltip>
+				</template>
 				<b-numberinput @input="onChange" v-model="configuration.min_base_balance"  :disabled="!is_editing_allowed"  :min="0" :step="0.1"></b-numberinput>
 			</b-field>
-			<b-field label="Markup (in %)">
+			<b-field>
+					<template slot="label">
+					Markup (in %)
+					<b-tooltip type="is-dark" label="Rate that applies to your price to enable profits">
+						<b-icon size="is-small" icon="help-circle-outline"></b-icon>
+					</b-tooltip>
+				</template>
 				<b-numberinput @input="onChange" v-model="configuration.markup"  :disabled="!is_editing_allowed" :min="0" :max="99" :step="0.1"></b-numberinput>
 			</b-field>
 		</article>

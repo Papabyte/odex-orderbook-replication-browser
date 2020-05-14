@@ -4,7 +4,10 @@
 			<p class="title is-5">Status</p>
 			<div class="is-size-6" style="margin-top:5px;"><b>Bittrex pair: 'BTC-GBYTE'</b></div>
 			<div class="is-size-6" style="margin-top:5px;"><b>Odex pair: 'GBYTE/{{configuration.destination_quote}}'</b></div>
-			<div class="is-size-6" style="margin-top:5px;"><b>Control address:</b> </div>
+			<div class="is-size-6" style="margin-top:5px;"><b>Control address:</b>
+			<b-tooltip style="margin-left:5px;" type="is-dark" label="Address that is used to sign your order, don't send funds to it">
+				<b-icon size="is-small" icon="help-circle-outline"></b-icon>
+			</b-tooltip></div>
 			<div class="is-size-7"> {{credentials.control_address || ''}}</div>
 			<div v-if="!isStarting" style="margin-top:20px;">
 				<b-button class="is-primary" v-if="!is_started" @click="$emit('start')">start</b-button>

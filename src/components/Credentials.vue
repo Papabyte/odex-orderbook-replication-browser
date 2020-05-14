@@ -2,10 +2,22 @@
 	<div class="tile is-3 is-parent">
 		<article class="tile is-child notification is-info">
 			<p class="title  is-5">Credentials</p>
-			<b-field label="wif" :message="wif_message">
+			<b-field :message="wif_message">
+				<template slot="label">
+					wif
+					<b-tooltip type="is-dark" label="Private key for your control address, can be generated on https://bonustrack.github.io/obyte-paperwallet/">
+					<b-icon size="is-small" icon="help-circle-outline"></b-icon>
+					</b-tooltip>
+				</template>
 				<b-input @input="onChange" v-model="credentials.wif" type="password" autocomplete="off" :disabled="!is_editing_allowed || are_credentials_saved"></b-input>
 			</b-field>
 			<b-field label="Bittrex API key" :message="api_key_message">
+				<template slot="label">
+					Bittrex API key
+					<b-tooltip type="is-dark" label="API key for your Bittrex account with 'READ INFO' and 'TRADE' enabled">
+					<b-icon size="is-small" icon="help-circle-outline"></b-icon>
+					</b-tooltip>
+				</template>
 				<b-input @input="onChange" v-model="credentials.sourceApiKey" type="password" :disabled="!is_editing_allowed || are_credentials_saved" autocomplete="off"></b-input>
 			</b-field>
 			<b-field label="Bittrex API Secret" :message="api_secret_message">

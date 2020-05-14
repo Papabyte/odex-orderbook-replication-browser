@@ -114,9 +114,10 @@ async function updateDestBids(bids) {
 	vueEventBus.$emit('dest_balances', dest_balances);
 	let source_balances = await source.getBalances();
 	console.error('dest balances', dest_balances);
-
+	let tokensBysymbols = exchange.getTokensBySymbol();
+	let quoteDecimals = tokensBysymbols[conf.destination_quote].decimals;
 	let { matcherFee } = exchange.getFees(conf.destination_quote);
-	let dest_quote_balance_available = (dest_balances[conf.destination_quote] * (1 - matcherFee) || 0)/1e8 - conf.min_quote_balance;
+	let dest_quote_balance_available = (dest_balances[conf.destination_quote] * (1 - matcherFee) || 0)/ (10**quoteDecimals) - conf.min_quote_balance;
 	let source_base_balance_available = (source_balances.free.GBYTE  || 0) - conf.min_base_balance - 0.0001;
 	let arrNewOrders = [];
 	let bDepleted = (dest_quote_balance_available <= 0 || source_base_balance_available <= 0);
@@ -161,7 +162,7 @@ async function updateDestAsks(asks) {
 	let dest_balances = await balances.getBalances();
 	vueEventBus.$emit('dest_balances', dest_balances);
 	let source_balances = await source.getBalances();
-	let dest_base_balance_available = (dest_balances.GBYTE || 0)/1e9 - conf.min_base_balance - 0.00001;
+	let dest_base_balance_available = (dest_balances.GBYTE || 0)/1e9 - conf.min_base_balance - 0.0001;
 	let source_quote_balance_available = (source_balances.free.BTC || 0) - conf.min_quote_balance;
 	let arrNewOrders = [];
 	let bDepleted = (dest_base_balance_available <=0 || source_quote_balance_available <= 0);
