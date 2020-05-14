@@ -36,6 +36,8 @@ export default {
 	},
 	created() {
 		EventBus.$on('orders_updated', (orders)=>{
+			if (!this.pairTokens)
+				return;
 			let baseMultiplier = 10 ** this.pairTokens[0].decimals
 			let priceMultiplier = 10 * (this.pairTokens[0].decimals - this.pairTokens[1].decimals)
 			this.asks = [];

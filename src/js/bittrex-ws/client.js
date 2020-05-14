@@ -1303,7 +1303,6 @@ _createConnection(delay)
     });
 
     connection.on('connected', function(data){
-			console.log("connection.on('connected'" + data);
         // clear timers for data timeout
         self._clearWatchdogTimers.call(self);
         self._connectionId = data.connectionId;

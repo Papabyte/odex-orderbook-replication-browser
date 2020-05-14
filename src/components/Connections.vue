@@ -16,8 +16,8 @@
 				testnet
 				</b-checkbox>
 			</div>
-			<b-button class="is-primary" v-if="!matchDefaultTestnet && is_editing_allowed" @click="switchToDefaultTestnet" style="margin:10px;">Switch to testnet default settings</b-button>				
-			<b-button class="is-primary" v-if="!matchDefault && is_editing_allowed" @click="switchToDefault" style="margin:10px;">Switch to default settings</b-button>
+			<b-button class="is-primary" v-if="!matchDefaultTestnet && is_editing_allowed" @click="switchToDefaultTestnet" style="margin:10px;">Switch to testnet default</b-button>				
+			<b-button class="is-primary" v-if="!matchDefault && is_editing_allowed" @click="switchToDefault" style="margin:10px;">Switch to default</b-button>
 		</article>
 	</div>
 </template>
