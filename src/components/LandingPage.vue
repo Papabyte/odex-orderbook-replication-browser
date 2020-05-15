@@ -102,11 +102,11 @@ export default {
 	methods:{
 		async start(){
 			if (!this.configuration.bComplete)
-				this.popToast('Configuration is not complete')
+				return this.popToast('Configuration is not complete')
 			if (!this.credentials.bComplete)
-				this.popToast('Credentials are not complete')
+				return this.popToast('Credentials are not complete')
 			if (!this.connections.bComplete)
-				this.popToast('Connections are not complete')
+				return this.popToast('Connections are not complete')
 			this.is_starting = true;
 			replicate.start(
 				Object.assign({}, this.credentials, this.connections,  this.configuration),
