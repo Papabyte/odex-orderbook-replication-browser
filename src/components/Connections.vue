@@ -58,9 +58,9 @@ export default {
 		},
 	},
 	created() {
-		this.connections.odex_ws_url = localStorage.getItem('odex_ws_url') || ''
-		this.connections.odex_http_url = localStorage.getItem('odex_http_url') || ''
-		this.connections.hub_ws_url = localStorage.getItem('hub_ws_url') || ''
+		this.connections.odex_ws_url = localStorage.getItem('odex_ws_url') || 'wss://odex.ooo/socket'
+		this.connections.odex_http_url = localStorage.getItem('odex_http_url') || 'https://odex.ooo/api'
+		this.connections.hub_ws_url = localStorage.getItem('hub_ws_url') || 'wss://obyte.org/bb'
 		this.connections.testnet = localStorage.getItem('testnet') === 'true' || false
 		this.onChange()
 	},
@@ -79,7 +79,7 @@ export default {
 			this.connections = connections // we have to reference new object to refresh form values
 			this.onChange();
 		},
-			switchToDefault(){
+		switchToDefault(){
 			const connections = {};
 			connections.odex_ws_url = this.default_odex_ws_url
 			connections.odex_http_url = this.default_odex_http_url
