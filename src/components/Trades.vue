@@ -12,7 +12,7 @@
 					]" paginated :per-page="10"></b-table>
 				</div>
 				<div v-else>
-					No trade for this session.
+					No trades for this session.
 				</div>
 		</article>
 	</div>

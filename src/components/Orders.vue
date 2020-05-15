@@ -39,7 +39,7 @@ export default {
 			if (!this.pairTokens)
 				return;
 			let baseMultiplier = 10 ** this.pairTokens[0].decimals
-			let priceMultiplier = 10 * (this.pairTokens[0].decimals - this.pairTokens[1].decimals)
+			let priceMultiplier = 10 ** (this.pairTokens[0].decimals - this.pairTokens[1].decimals)
 			this.asks = [];
 			this.bids = [];
 			for (var key in orders){
