@@ -136,23 +136,25 @@ export default {
 			this.$emit("onFormChange", this.configuration)
 		},
 
-
 		createAuthorizeAndRevokeLinks(){
-			const base64url = require('base64url');
 			var data = {
 				grant: 1,
 				address: this.credentials.control_address
+
 			}
 			var json_string = JSON.stringify(data);
-			var base64data = base64url(json_string);
-			this.grantLink = (this.connections.testnet ? testnet_protocol : mainnet_protocol)+":"+aa_address+"?amount=10000&base64data="+base64data;
+			var base64data = encodeURIComponent(btoa(json_string));
+
+			this.grantLink = (this.connections.testnet ? testnet_protocol : mainnet_protocol)+":"
+			+aa_address+"?amount=10000&from_address="+this.configuration.owner_address+"&single_address=1&base64data="+base64data;
 			data = {
 				revoke: 1,
 				address: this.credentials.control_address
 			}
 			json_string = JSON.stringify(data);
-			base64data = base64url(json_string);
-			this.revokeLink = (this.connections.testnet ? testnet_protocol : mainnet_protocol)+":"+aa_address+"?amount=10000&base64data="+base64data;
+			base64data = encodeURIComponent(btoa(json_string));
+			this.revokeLink = (this.connections.testnet ? testnet_protocol : mainnet_protocol)+":"
+			+aa_address+"?amount=10000&from_address="+this.configuration.owner_address+"&single_address=1&base64data="+base64data;
 		}
 	}
 }
