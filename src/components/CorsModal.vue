@@ -9,7 +9,7 @@
 			</p>
 			<p>
 			To avoid this issue, it's required that you install an extension that will alter http requests to make the browser believe the server has answered with proper headers.
-			We recommend to use Firefox and install this extension: <a href="https://addons.mozilla.org/fr/firefox/addon/cors-everywhere/" target="_blank" rel="noopener noreferrer"> https://addons.mozilla.org/fr/firefox/addon/cors-everywhere/ </a>
+			We recommend to use Firefox and install this extension: <a href="https://addons.mozilla.org/en/firefox/addon/cors-everywhere/" target="_blank" rel="noopener noreferrer"> https://addons.mozilla.org/en/firefox/addon/cors-everywhere/ </a>
 			</p>
 			<p>
 			Don't be lazy, don't enable CORS for any website but whitelist only this application. To do so go click on icon extension -> Manage Extension -> Preferences and put

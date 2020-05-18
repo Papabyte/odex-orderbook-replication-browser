@@ -475,6 +475,11 @@ function start(_conf, _vueEventBus) {
 			bStarted = false;
 			return reject("Coudln't start Odex client: " + e.toString());
 		}
+		
+		if (!await odex.account.isAuthorizationGranted()){
+			bStarted = false;
+			return reject("Control address isn't authorized to trade");
+		}
 
 		try {
 			var pairTokens = await exchange.getTokensByPair(conf.dest_pair);
