@@ -9,7 +9,7 @@
 
 				<div class="column has-text-right">
 					<h6 class="title is-6" style="padding: 10px">
-						<a :href="conf.intructions_url" target="_blank">Instructions - Source code 
+						<a :href="conf.instructions_url" target="_blank">Instructions - Source code 
 							<b-icon size="is-small" icon="link"></b-icon>
 						</a>
 					</h6>

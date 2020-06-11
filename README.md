@@ -2,6 +2,9 @@
 
 This bot is a browser application that replicates orders from Bittrex BTC-GBYTE to a BTC [discount stablecoin](https://ostable.org/) traded on an [Odex](odex.ooo) decentralized exchange. When an order is filled on Odex, its opposite is immediately placed on Bittrex. A markup is configurable to enable some profits.
 
+![odex-replibot](https://raw.githubusercontent.com/Papabyte/odex-orderbook-replication-browser/master/replibot.jpg)
+
+
 This bot and its source code are offered as is, without any guarantees of its correct operation. The bot might lose money because of bugs, unreliable network connections, and other reasons.
 
 ## Run locally (recommended)
