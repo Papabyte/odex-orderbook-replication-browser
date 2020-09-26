@@ -88,7 +88,7 @@ export default {
 		this.configuration.min_quote_balance = Number(localStorage.getItem('min_quote_balance')) || 0.01
 		this.configuration.min_base_balance  = Number(localStorage.getItem('min_base_balance')) || 0.1
 		this.configuration.markup = Number(localStorage.getItem('markup')) || 2
-		this.configuration.destination_quote = localStorage.getItem('destination_quote') || "BTC_20200701"
+		this.configuration.destination_quote = localStorage.getItem('destination_quote') || "OBIT"
 		this.onChange()
 	},
 	watch:{
